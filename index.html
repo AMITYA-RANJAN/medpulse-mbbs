@@ -100,6 +100,7 @@
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
+          <button id="openAiBtnTop" class="px-2.5 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-sm">✦ AI Control</button>
           <button id="miniPomoBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-semibold hover:bg-teal-100 transition">
             <span id="miniPomoDot" class="w-2 h-2 rounded-full bg-teal-500"></span>
             <span id="miniPomoTime">25:00</span>
@@ -228,6 +229,53 @@
           <button id="applySyncCodeBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Apply Code</button>
         </div>
       </div>
+    </div>
+  </div>
+
+
+  <!-- AI Assistant Modal (Switchable Gemini / ChatGPT / Custom) -->
+  <div id="aiModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-base">✦ AI Study Assistant</h3>
+          <p class="text-[11px] text-slate-500">Control MedPulse with Gemini, ChatGPT (OpenAI), or any compatible API</p>
+        </div>
+        <button id="closeAiModal" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs">✕</button>
+      </div>
+
+      <!-- Provider Settings (Collapsible) -->
+      <div class="p-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <select id="aiProviderSel" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI (ChatGPT)</option>
+            <option value="custom">Custom OpenAI-Compatible</option>
+          </select>
+          <input id="aiModelIn" type="text" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Model (e.g. gemini-2.5-flash)">
+          <input id="aiKeyIn" type="password" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Paste API Key (saved locally)">
+        </div>
+        <div id="aiCustomUrlRow" class="hidden flex gap-2">
+          <input id="aiBaseUrlIn" type="url" class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Base URL (e.g. https://api.groq.com/openai/v1/chat/completions)">
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] text-slate-500">Your API key stays only in your browser's localStorage.</span>
+          <button id="saveAiCfgBtn" class="px-3 py-1 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700">Save AI Settings</button>
+        </div>
+      </div>
+
+      <!-- Chat Log -->
+      <div id="aiChatLog" class="flex-1 p-4 space-y-2.5 overflow-y-auto max-h-72 text-xs sm:text-sm scrollbar-thin">
+        <div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-slate-700 dark:text-slate-200">
+          Try saying: <strong>"Add today 9 PM Ophthalmology lecture"</strong>, <strong>"Add task Revise Glaucoma tomorrow high priority"</strong>, or <strong>"Mark 2026-11-20 as Gazetted Holiday"</strong>.
+        </div>
+      </div>
+
+      <!-- Prompt Input -->
+      <form id="aiChatForm" class="p-3 border-t border-slate-100 dark:border-slate-800 flex gap-2">
+        <input id="aiPromptIn" type="text" required class="flex-1 px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Tell AI what to add or update...">
+        <button id="aiSendBtn" type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Send</button>
+      </form>
     </div>
   </div>
 
@@ -577,7 +625,140 @@
             btn.addEventListener('click', () => {
               state.activeTab = btn.dataset.nav;
               saveState(true);
-              if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.hostname.includes('googleusercontent')) {
+        
+      // ================== SWITCHABLE AI ASSISTANT (Gemini / ChatGPT / Custom) ==================
+      const AI_CFG_KEY = 'medpulse_ai_cfg_v1';
+      let aiCfg = (() => {
+        try { return JSON.parse(localStorage.getItem(AI_CFG_KEY)) || { provider: 'gemini', model: 'gemini-2.5-flash', key: '', baseUrl: '' }; }
+        catch (e) { return { provider: 'gemini', model: 'gemini-2.5-flash', key: '', baseUrl: '' }; }
+      })();
+
+      function appendAiChatMsg(role, text) {
+        const log = document.getElementById('aiChatLog');
+        const div = document.createElement('div');
+        div.className = role === 'user'
+          ? 'p-2.5 rounded-xl bg-teal-600 text-white ml-8 text-xs sm:text-sm'
+          : 'p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 mr-6 text-xs sm:text-sm';
+        div.textContent = text;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function executeAiActions(actions) {
+        if (!Array.isArray(actions)) return 0;
+        let count = 0;
+        actions.forEach(act => {
+          if (!act || !act.action) return;
+          if (act.action === 'add_todo' && act.text) {
+            state.todos.unshift({ id: 't_' + Date.now() + count, text: act.text, subject: act.subject || state.subjects[0].name, priority: act.priority || 'Medium', due: act.due || getTodayStr(), done: false });
+            count++;
+          } else if (act.action === 'add_schedule' && act.subject) {
+            state.schedule.push({ id: 'sc_' + Date.now() + count, day: act.day || getTodayDayName(), time: act.time || '21:00 - 22:00', subject: act.subject, type: act.type || 'Theory' });
+            count++;
+          } else if (act.action === 'add_holiday' && act.date) {
+            if (!state.holidays.some(h => h.date === act.date)) state.holidays.push({ id: 'hol_' + Date.now() + count, date: act.date, name: act.name || 'Holiday' });
+            count++;
+          } else if (act.action === 'add_exam' && act.title) {
+            state.exams.push({ id: 'e_' + Date.now() + count, title: act.title, subject: act.subject || 'General', date: act.date || getTodayStr(), syllabusPct: 20, notes: act.notes || '' });
+            count++;
+          } else if (act.action === 'update_mess' && act.day && act.meal && act.items) {
+            if (state.messMenu[act.day]) { state.messMenu[act.day][act.meal] = act.items; count++; }
+          } else if (act.action === 'add_syllabus_topic' && act.subject && act.title) {
+            let sec = state.syllabus.find(x => x.subject.toLowerCase() === act.subject.toLowerCase());
+            if (!sec) { sec = { id: 'sy_' + Date.now(), subject: act.subject, units: [] }; state.syllabus.push(sec); }
+            sec.units.push({ id: 'u_' + Date.now() + count, title: act.title, highYield: !!act.highYield, done: false });
+            count++;
+          }
+        });
+        if (count > 0) { saveState(); renderMainView(); }
+        return count;
+      }
+
+      document.getElementById('openAiBtnTop').addEventListener('click', () => {
+        document.getElementById('aiProviderSel').value = aiCfg.provider || 'gemini';
+        document.getElementById('aiModelIn').value = aiCfg.model || 'gemini-2.5-flash';
+        document.getElementById('aiKeyIn').value = aiCfg.key || '';
+        document.getElementById('aiBaseUrlIn').value = aiCfg.baseUrl || '';
+        document.getElementById('aiCustomUrlRow').classList.toggle('hidden', aiCfg.provider !== 'custom');
+        const m = document.getElementById('aiModal'); m.classList.remove('hidden'); m.classList.add('flex');
+      });
+      document.getElementById('closeAiModal').addEventListener('click', () => {
+        const m = document.getElementById('aiModal'); m.classList.add('hidden'); m.classList.remove('flex');
+      });
+      document.getElementById('aiProviderSel').addEventListener('change', (e) => {
+        const p = e.target.value;
+        document.getElementById('aiCustomUrlRow').classList.toggle('hidden', p !== 'custom');
+        if (p === 'gemini') document.getElementById('aiModelIn').value = 'gemini-2.5-flash';
+        else if (p === 'openai') document.getElementById('aiModelIn').value = 'gpt-4o-mini';
+      });
+      document.getElementById('saveAiCfgBtn').addEventListener('click', () => {
+        aiCfg = {
+          provider: document.getElementById('aiProviderSel').value,
+          model: document.getElementById('aiModelIn').value.trim(),
+          key: document.getElementById('aiKeyIn').value.trim(),
+          baseUrl: document.getElementById('aiBaseUrlIn').value.trim()
+        };
+        try { localStorage.setItem(AI_CFG_KEY, JSON.stringify(aiCfg)); } catch (e) {}
+        showToast('AI settings saved locally!', 'success');
+      });
+
+      document.getElementById('aiChatForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const prompt = document.getElementById('aiPromptIn').value.trim();
+        if (!prompt) return;
+        if (!aiCfg.key) { showToast('Paste and save your Gemini or OpenAI API key first', 'error'); return; }
+        document.getElementById('aiPromptIn').value = '';
+        appendAiChatMsg('user', prompt);
+
+        const sysPrompt = `You control the MedPulse MBBS app. Today is ${getTodayStr()} (${getTodayDayName()}). Available subjects: ${getSubjectNames().join(', ')}.
+Return ONLY valid JSON: {"reply":"short confirmation","actions":[...]}
+Supported actions:
+- {"action":"add_todo","text":"...","subject":"...","priority":"High|Medium|Low","due":"YYYY-MM-DD"}
+- {"action":"add_schedule","day":"Monday..Saturday","time":"21:00 - 22:00","subject":"...","type":"Theory|Practical"}
+- {"action":"add_holiday","date":"YYYY-MM-DD","name":"..."}
+- {"action":"add_exam","title":"...","subject":"...","date":"YYYY-MM-DD","notes":"..."}
+- {"action":"update_mess","day":"Monday..Sunday","meal":"Breakfast|Lunch|Snacks|Dinner","items":"..."}
+- {"action":"add_syllabus_topic","subject":"...","title":"...","highYield":true}`;
+
+        try {
+          let rawText = '';
+          if (aiCfg.provider === 'gemini') {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(aiCfg.model || 'gemini-2.5-flash')}:generateContent?key=${encodeURIComponent(aiCfg.key)}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: sysPrompt + '\nUser request: ' + prompt }] }],
+                generationConfig: { responseMimeType: 'application/json' }
+              })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error?.message || res.status);
+            rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          } else {
+            const url = aiCfg.provider === 'custom' && aiCfg.baseUrl ? aiCfg.baseUrl : 'https://api.openai.com/v1/chat/completions';
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${aiCfg.key}` },
+              body: JSON.stringify({
+                model: aiCfg.model || 'gpt-4o-mini',
+                messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
+              })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error?.message || res.status);
+            rawText = data.choices?.[0]?.message?.content || '{}';
+          }
+          const parsed = JSON.parse(rawText.replace(/^```json|```$/g, '').trim());
+          const applied = executeAiActions(parsed.actions);
+          appendAiChatMsg('ai', `${parsed.reply || 'Done!'} (${applied} change${applied === 1 ? '' : 's'} applied)`);
+        } catch (err) {
+          appendAiChatMsg('ai', 'Error: ' + err.message);
+        }
+      });
+
+      if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.hostname.includes('googleusercontent')) {
         try { navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch (e) {}
       }
       renderNav();
@@ -1578,8 +1759,10 @@
                 <p class="text-xs text-teal-700 dark:text-teal-400">75% Theory & 80% Practical required. Upload your timetable PDF/Image to auto-track monthly classes & daily check-ins.</p>
               </div>
               <div class="flex flex-wrap gap-2">
-                <button id="importSchedulePdfBtn" class="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Upload Class Schedule PDF/Img</button>
+                <button id="importSchedulePdfBtn" class="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Upload Schedule PDF/Img</button>
+                <button id="manageScheduleBtn" class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50">✎ Edit Weekly Schedule</button>
                 <button id="addAttSubBtn" class="px-3.5 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">+ Add Subject</button>
+                <button id="resetAttBtn" class="px-3.5 py-2 rounded-xl bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-xs font-semibold hover:bg-rose-100">↺ Reset Attendance</button>
               </div>
             </div>
 
@@ -1633,10 +1816,15 @@
                     <input id="exclSunCb" type="checkbox" ${state.excludeSundays ? 'checked' : ''} class="accent-teal-600"> Exclude Sundays
                   </label>
                 </div>
-                <form id="addHolForm" class="flex gap-1.5">
-                  <input id="holDateIn" type="date" required class="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                  <input id="holNameIn" type="text" required placeholder="Holiday name" class="flex-1 min-w-0 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                  <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">+</button>
+                <form id="addHolForm" class="space-y-1.5">
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <input id="holDateIn" type="date" required title="Start Date" class="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                    <input id="holEndDateIn" type="date" title="End Date (optional for multi-day holiday)" class="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                  </div>
+                  <div class="flex gap-1.5">
+                    <input id="holNameIn" type="text" required placeholder="Gazetted holiday name (end date optional)" class="flex-1 min-w-0 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">+ Add</button>
+                  </div>
                 </form>
                 <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-44 overflow-y-auto scrollbar-thin">
                   ${(state.holidays || []).map(h => `
@@ -1690,8 +1878,83 @@
         document.getElementById('exclSunCb').addEventListener('change', (e) => { state.excludeSundays = e.target.checked; saveState(); renderAttendance(el); });
         document.getElementById('addHolForm').addEventListener('submit', (e) => {
           e.preventDefault();
-          state.holidays.push({ id: 'hol_' + Date.now(), date: document.getElementById('holDateIn').value, name: document.getElementById('holNameIn').value.trim() });
+          const startStr = document.getElementById('holDateIn').value;
+          const endStr = document.getElementById('holEndDateIn').value || startStr;
+          const name = document.getElementById('holNameIn').value.trim();
+          let cur = new Date(startStr + 'T12:00:00');
+          const end = new Date(endStr + 'T12:00:00');
+          let count = 0;
+          while (cur <= end && count < 60) {
+            const ds = cur.toISOString().slice(0, 10);
+            if (!state.holidays.some(h => h.date === ds)) {
+              state.holidays.push({ id: 'hol_' + Date.now() + '_' + count, date: ds, name });
+            }
+            cur = new Date(cur.getTime() + 86400000);
+            count++;
+          }
           saveState(); renderAttendance(el);
+          showToast(`Added ${count} holiday date(s)`, 'success');
+        });
+        document.getElementById('resetAttBtn').addEventListener('click', () => {
+          openAppModal(`
+            <h3 class="font-bold text-base mb-2">Reset Attendance Data?</h3>
+            <p class="text-xs text-slate-500 mb-4">Choose whether to reset all subject counts to 0/0 (keeping your subjects & timetable) or clear daily check-in logs too.</p>
+            <div class="flex justify-end gap-2">
+              <button id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+              <button id="confirmResetAttBtn" class="px-4 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold">Reset Counts to 0/0</button>
+            </div>
+          `, () => {
+            document.getElementById('confirmResetAttBtn').addEventListener('click', () => {
+              state.attendance.forEach(a => { a.attended = 0; a.total = 0; });
+              state.dailyAttendanceLog = {};
+              saveState(); closeAppModal(); renderAttendance(el);
+              showToast('Attendance counts & daily logs reset to 0', 'success');
+            });
+          });
+        });
+        document.getElementById('manageScheduleBtn').addEventListener('click', () => {
+          const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const renderSchedModal = () => {
+            openAppModal(`
+              <div class="space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <h3 class="font-bold text-base">Edit Weekly Class Schedule</h3>
+                  <button id="cancelAppModal" class="p-1 text-xs">✕</button>
+                </div>
+                <form id="addSlotForm" class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs">
+                  <select id="slDay" class="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">${days.map(d => `<option>${d}</option>`).join('')}</select>
+                  <input id="slTime" type="text" required value="09:00 - 10:00" class="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <select id="slSub" class="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">${getSubjectNames().map(n => `<option>${escapeHtml(n)}</option>`).join('')}</select>
+                  <select id="slType" class="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"><option>Theory</option><option>Practical</option></select>
+                  <button type="submit" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white font-semibold">+ Add</button>
+                </form>
+                <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto text-xs">
+                  ${(state.schedule || []).map(sl => `
+                    <div class="py-1.5 flex items-center justify-between gap-2">
+                      <span><strong>${sl.day}</strong> ${escapeHtml(sl.time)} — ${escapeHtml(sl.subject)} (${sl.type})</span>
+                      <button data-del-slot="${sl.id}" class="text-rose-600 px-2">✕</button>
+                    </div>
+                  `).join('') || '<p class="text-slate-400 py-3">No classes scheduled.</p>'}
+                </div>
+              </div>
+            `, () => {
+              document.getElementById('addSlotForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                state.schedule.push({
+                  id: 'sc_' + Date.now(), day: document.getElementById('slDay').value,
+                  time: document.getElementById('slTime').value.trim(),
+                  subject: document.getElementById('slSub').value,
+                  type: document.getElementById('slType').value
+                });
+                saveState(); renderAttendance(el); renderSchedModal();
+              });
+              document.querySelectorAll('[data-del-slot]').forEach(b => b.addEventListener('click', () => {
+                state.schedule = state.schedule.filter(x => x.id !== b.dataset.delSlot);
+                saveState(); renderAttendance(el); renderSchedModal();
+              }));
+            });
+          };
+          renderSchedModal();
         });
         el.querySelectorAll('[data-del-hol]').forEach(b => b.addEventListener('click', () => {
           state.holidays = state.holidays.filter(h => h.id !== b.dataset.delHol);
@@ -1751,6 +2014,7 @@
             <div class="flex flex-wrap items-center justify-between gap-2">
               <input id="sylSearchIn" type="search" value="${escapeHtml(sylSearch)}" placeholder="Search 3rd Year CBME topics..." class="flex-1 min-w-[200px] px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
               <button id="sylImportPdfBtn" class="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Import Image/PDF</button>
+              <button id="addSylSecBtn" class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50">+ Add Subject Section</button>
               <button id="addSylTopicBtn" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">+ Add Topic</button>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1765,18 +2029,24 @@
                         <h3 class="font-bold text-base">${escapeHtml(sec.subject)}</h3>
                         <p class="text-xs text-slate-500">${doneCount}/${sec.units.length} competencies completed</p>
                       </div>
-                      <span class="text-sm font-bold text-teal-600">${pct}%</span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-sm font-bold text-teal-600">${pct}%</span>
+                        <button data-del-syl-sec="${sec.id}" class="text-xs text-slate-400 hover:text-rose-600 px-1.5 py-0.5 rounded" title="Remove Subject Section">✕</button>
+                      </div>
                     </div>
                     <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div class="bg-teal-600 h-full rounded-full transition-all" style="width:${pct}%"></div>
                     </div>
                     <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-80 overflow-y-auto scrollbar-thin">
                       ${units.map(u => `
-                        <label class="py-2.5 flex items-start gap-2.5 cursor-pointer">
-                          <input type="checkbox" data-syl-sub="${sec.id}" data-syl-unit="${u.id}" ${u.done ? 'checked' : ''} class="mt-0.5 w-4 h-4 rounded accent-teal-600">
-                          <span class="text-xs sm:text-sm flex-1 ${u.done ? 'line-through text-slate-400' : ''}">${escapeHtml(u.title)}</span>
+                        <div class="py-2.5 flex items-start gap-2.5">
+                          <label class="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" data-syl-sub="${sec.id}" data-syl-unit="${u.id}" ${u.done ? 'checked' : ''} class="mt-0.5 w-4 h-4 rounded accent-teal-600">
+                            <span class="text-xs sm:text-sm flex-1 ${u.done ? 'line-through text-slate-400' : ''}">${escapeHtml(u.title)}</span>
+                          </label>
                           ${u.highYield ? '<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-semibold shrink-0">High-Yield</span>' : ''}
-                        </label>
+                          <button data-del-syl-unit="${sec.id}|${u.id}" class="text-slate-400 hover:text-rose-600 text-xs px-1" title="Delete topic">✕</button>
+                        </div>
                       `).join('') || '<p class="text-xs text-slate-400 py-3">No matching topics.</p>'}
                     </div>
                   </div>
@@ -1787,6 +2057,40 @@
         `;
         document.getElementById('sylImportPdfBtn').addEventListener('click', () => openSmartImportModal('syllabus'));
         document.getElementById('sylSearchIn').addEventListener('input', (e) => { sylSearch = e.target.value; renderSyllabus(el); });
+        el.querySelectorAll('[data-del-syl-sec]').forEach(b => b.addEventListener('click', () => {
+          state.syllabus = state.syllabus.filter(sec => sec.id !== b.dataset.delSylSec);
+          saveState(); renderSyllabus(el);
+          showToast('Removed subject section', 'info');
+        }));
+        el.querySelectorAll('[data-del-syl-unit]').forEach(b => b.addEventListener('click', () => {
+          const [secId, unitId] = b.dataset.delSylUnit.split('|');
+          const sec = state.syllabus.find(x => x.id === secId);
+          if (sec) { sec.units = sec.units.filter(u => u.id !== unitId); saveState(); renderSyllabus(el); }
+        }));
+        document.getElementById('addSylSecBtn').addEventListener('click', () => {
+          openAppModal(`
+            <h3 class="font-bold text-base mb-3">Add Syllabus Subject Section</h3>
+            <form id="newSylSecForm" class="space-y-3 text-sm">
+              <input id="nssName" type="text" required placeholder="Subject Name (e.g., Pediatrics)" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div class="flex justify-end gap-2">
+                <button type="button" id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                <button type="submit" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Create</button>
+              </div>
+            </form>
+          `, () => {
+            document.getElementById('newSylSecForm').addEventListener('submit', (e) => {
+              e.preventDefault();
+              const name = document.getElementById('nssName').value.trim();
+              if (name) {
+                state.syllabus.push({ id: 'sy_' + Date.now(), subject: name, units: [] });
+                if (!state.subjects.some(x => x.name.toLowerCase() === name.toLowerCase())) {
+                  state.subjects.push({ id: 'sub_' + Date.now(), name, color: 'teal' });
+                }
+                saveState(); closeAppModal(); renderSyllabus(el);
+              }
+            });
+          });
+        });
         el.querySelectorAll('[data-syl-unit]').forEach(cb => cb.addEventListener('change', () => {
           const sec = state.syllabus.find(s => s.id === cb.dataset.sylSub);
           const u = sec && sec.units.find(x => x.id === cb.dataset.sylUnit);
@@ -2424,7 +2728,10 @@
               </button>
             </div>
             <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-              <h3 class="font-bold text-base">Today's Study Log</h3>
+              <div class="flex items-center justify-between">
+                <h3 class="font-bold text-base">Today's Study Log</h3>
+                <button id="pomoResetLogBtn" class="text-xs font-semibold text-rose-600 hover:underline">Reset Log</button>
+              </div>
               <div class="grid grid-cols-2 gap-3">
                 <div class="p-3 rounded-xl bg-teal-50 dark:bg-teal-900/20">
                   <div class="text-[11px] text-teal-700 dark:text-teal-300 font-semibold">Sessions</div>
@@ -2439,7 +2746,10 @@
                 ${state.pomodoro.history.map(h => `
                   <div class="py-2.5 flex items-center justify-between text-xs">
                     <div><div class="font-semibold">${escapeHtml(h.subject)}</div><div class="text-slate-400">${h.time}</div></div>
-                    <span class="px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-semibold">+${h.minutes}m</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-semibold">+${h.minutes}m</span>
+                      <button data-del-pomo="${h.id}" class="text-slate-400 hover:text-rose-600">✕</button>
+                    </div>
                   </div>
                 `).join('')}
               </div>
@@ -2458,6 +2768,20 @@
           pomoState.remaining = pomoState.durations[pomoState.mode]; updateMiniPomo(); renderPomodoro(el);
         });
         document.getElementById('pomoNoiseBtn').addEventListener('click', toggleBrownNoise);
+        document.getElementById('pomoResetLogBtn').addEventListener('click', () => {
+          state.pomodoro = { completedToday: 0, totalMinutes: 0, history: [] };
+          saveState(); renderPomodoro(el);
+          showToast('Pomodoro study log reset', 'info');
+        });
+        el.querySelectorAll('[data-del-pomo]').forEach(b => b.addEventListener('click', () => {
+          const item = state.pomodoro.history.find(x => x.id === b.dataset.delPomo);
+          if (item) {
+            state.pomodoro.completedToday = Math.max(0, state.pomodoro.completedToday - 1);
+            state.pomodoro.totalMinutes = Math.max(0, state.pomodoro.totalMinutes - item.minutes);
+            state.pomodoro.history = state.pomodoro.history.filter(x => x.id !== item.id);
+            saveState(); renderPomodoro(el);
+          }
+        }));
       }
 
       // 7. UPCOMING EXAMS
@@ -2561,7 +2885,10 @@
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-xs sm:text-sm">
                   ${days.map(day => `
                     <tr class="${day === today ? 'bg-teal-50/70 dark:bg-teal-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}">
-                      <td class="p-3.5 font-bold ${day === today ? 'text-teal-700 dark:text-teal-300' : ''}">${day} ${day === today ? '★' : ''}</td>
+                      <td class="p-3.5 font-bold ${day === today ? 'text-teal-700 dark:text-teal-300' : ''}">
+                        <div>${day} ${day === today ? '★' : ''}</div>
+                        <button data-edit-mess-day="${day}" class="mt-1 text-[10px] font-semibold text-teal-600 hover:underline">✎ Edit</button>
+                      </td>
                       ${meals.map(m => `
                         <td class="p-3.5">
                           <div contenteditable="true" data-mess-day="${day}" data-mess-meal="${m}" class="rounded px-1.5 py-1 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500">${escapeHtml(state.messMenu[day][m] || '')}</div>
@@ -2575,6 +2902,35 @@
           </div>
         `;
         document.getElementById('messImportPdfBtn').addEventListener('click', () => openSmartImportModal('mess'));
+        el.querySelectorAll('[data-edit-mess-day]').forEach(b => b.addEventListener('click', () => {
+          const day = b.dataset.editMessDay;
+          const m = state.messMenu[day] || {};
+          openAppModal(`
+            <h3 class="font-bold text-base mb-3">Edit ${day} Mess Menu</h3>
+            <form id="editMessDayForm" class="space-y-2.5 text-xs sm:text-sm">
+              <div><label class="font-semibold text-xs">Breakfast</label><input id="emB" type="text" value="${escapeHtml(m.Breakfast || '')}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"></div>
+              <div><label class="font-semibold text-xs">Lunch</label><input id="emL" type="text" value="${escapeHtml(m.Lunch || '')}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"></div>
+              <div><label class="font-semibold text-xs">Snacks</label><input id="emS" type="text" value="${escapeHtml(m.Snacks || '')}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"></div>
+              <div><label class="font-semibold text-xs">Dinner</label><input id="emD" type="text" value="${escapeHtml(m.Dinner || '')}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"></div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                <button type="submit" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Save</button>
+              </div>
+            </form>
+          `, () => {
+            document.getElementById('editMessDayForm').addEventListener('submit', (e) => {
+              e.preventDefault();
+              state.messMenu[day] = {
+                Breakfast: document.getElementById('emB').value.trim(),
+                Lunch: document.getElementById('emL').value.trim(),
+                Snacks: document.getElementById('emS').value.trim(),
+                Dinner: document.getElementById('emD').value.trim()
+              };
+              saveState(); closeAppModal(); renderMessMenu(el);
+              showToast(`${day} menu saved`, 'success');
+            });
+          });
+        }));
         el.querySelectorAll('[data-mess-day]').forEach(cell => cell.addEventListener('blur', () => {
           state.messMenu[cell.dataset.messDay][cell.dataset.messMeal] = cell.textContent.trim();
           saveState(); showToast('Mess menu updated', 'success');
