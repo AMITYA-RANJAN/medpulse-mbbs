@@ -454,6 +454,7 @@
           ],
           dailyAttendanceLog: {},
           monthlySnapshots: {},
+          monthlyManualOverrides: {},
           excludeSundays: true,
           syllabus: DEFAULT_SYLLABUS,
           messMenu: DEFAULT_MESS_MENU,
@@ -1529,6 +1530,14 @@ Supported actions:
             else if (st === 'absent') bySub[key].absent++;
           });
         }
+        const overrides = (state.monthlyManualOverrides && state.monthlyManualOverrides[monthStr]) || {};
+        Object.keys(overrides).forEach(k => {
+          const ov = overrides[k];
+          if (!bySub[k]) bySub[k] = { subject: ov.subject, type: ov.type, scheduled: 0, present: 0, absent: 0, cancelled: 0 };
+          if (ov.scheduled !== undefined) bySub[k].scheduled = ov.scheduled;
+          if (ov.present !== undefined) bySub[k].present = ov.present;
+          if (ov.absent !== undefined) bySub[k].absent = ov.absent;
+        });
         return Object.values(bySub);
       }
 
@@ -1780,52 +1789,7 @@ Supported actions:
         el.innerHTML = `
           <div class="space-y-6">
             
-            <!-- Interactive Calendar-Wise Attendance -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div class="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-3">
-                <div class="flex items-center justify-between gap-2">
-                  <div>
-                    <h4 class="font-bold text-sm">Attendance Calendar</h4>
-                    <p class="text-[11px] text-slate-500">Tap any date (even before Nov 8) to view &amp; mark that day's classes.</p>
-                  </div>
-                  <input id="calMonthPick" type="month" value="${selectedAttMonth}" class="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                </div>
-                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400">
-                  <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-                </div>
-                <div class="grid grid-cols-7 gap-1">
-                  ${(() => {
-                    const [y, m] = selectedAttMonth.split('-').map(Number);
-                    const firstDay = new Date(y, m - 1, 1).getDay();
-                    const daysInM = new Date(y, m, 0).getDate();
-                    const holSet = getHolidaySet();
-                    let cells = '';
-                    for (let i = 0; i < firstDay; i++) cells += '<div></div>';
-                    for (let d = 1; d <= daysInM; d++) {
-                      const ds = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                      const dn = getDayNameFromDateStr(ds);
-                      const isHol = holSet.has(ds) || (state.excludeSundays && dn === 'Sunday');
-                      const log = (state.dailyAttendanceLog && state.dailyAttendanceLog[ds]) || {};
-                      const vals = Object.values(log);
-                      const pCnt = vals.filter(v => v === 'present').length;
-                      const aCnt = vals.filter(v => v === 'absent').length;
-                      const isSel = selectedAttDate === ds;
-                      const isToday = ds === todayStr;
-                      cells += `
-                        <button data-cal-date="${ds}" class="p-1.5 rounded-xl border text-center transition flex flex-col items-center justify-center min-h-[46px] ${isSel ? 'border-teal-600 bg-teal-50 dark:bg-teal-900/30 ring-2 ring-teal-500/40' : isHol ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20' : 'border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}">
-                          <span class="text-xs font-bold ${isToday ? 'text-teal-600 underline' : ''}">${d}</span>
-                          <span class="text-[9px] leading-tight mt-0.5">${isHol ? 'Off' : (pCnt || aCnt) ? `<span class="text-emerald-600">${pCnt}✓</span> <span class="text-rose-600">${aCnt}✗</span>` : '·'}</span>
-                        </button>
-                      `;
-                    }
-                    return cells;
-                  })()}
-                </div>
-              </div>
-              <div class="lg:col-span-6">
-                ${renderDailyCheckinCard(selectedAttDate)}
-              </div>
-            </div>
+            ${renderDailyCheckinCard(todayStr)}
 
             <!-- Saved Monthly Attendance Percentage History -->
             <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-2">
@@ -2059,14 +2023,19 @@ Supported actions:
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                       ${monthlyRows.map(r => {
                         const logged = r.present + r.absent;
-                        const mpct = logged ? Math.round((r.present / logged) * 100) : '-';
+                        const target = r.type === 'Theory' ? 75 : 80;
+                        const adv = calcAttendanceAdvice(r.present, logged, target);
+                        const key = `${r.subject} (${r.type})`;
                         return `
                           <tr>
-                            <td class="py-2 font-semibold">${escapeHtml(r.subject)} <span class="text-[10px] text-slate-400">(${r.type})</span></td>
-                            <td class="py-2">${r.scheduled}</td>
-                            <td class="py-2 text-emerald-600 font-semibold">${r.present}</td>
-                            <td class="py-2 text-rose-600 font-semibold">${r.absent}</td>
-                            <td class="py-2 font-bold">${mpct === '-' ? '—' : mpct + '%'}</td>
+                            <td class="py-2 pr-2 font-semibold">
+                              <div>${escapeHtml(r.subject)} <span class="text-[10px] text-slate-400">(${r.type})</span></div>
+                              <div class="text-[10px] ${adv.status === 'danger' ? 'text-rose-500' : 'text-slate-400'}">${logged ? adv.msg : 'Edit Present/Absent'}</div>
+                            </td>
+                            <td class="py-1.5 pr-1"><input type="number" min="0" value="${r.scheduled}" data-mo-edit="${escapeHtml(key)}|scheduled|${escapeHtml(r.subject)}|${r.type}" class="w-14 px-1.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"></td>
+                            <td class="py-1.5 pr-1"><input type="number" min="0" value="${r.present}" data-mo-edit="${escapeHtml(key)}|present|${escapeHtml(r.subject)}|${r.type}" class="w-14 px-1.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold"></td>
+                            <td class="py-1.5 pr-1"><input type="number" min="0" value="${r.absent}" data-mo-edit="${escapeHtml(key)}|absent|${escapeHtml(r.subject)}|${r.type}" class="w-14 px-1.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-rose-50/50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs font-semibold"></td>
+                            <td class="py-2 font-bold ${logged && adv.pct < target ? 'text-rose-600' : 'text-teal-600'}">${logged ? adv.pct + '%' : '—'}</td>
                           </tr>
                         `;
                       }).join('') || '<tr><td colspan="5" class="py-4 text-center text-slate-400">No timetable slots configured yet.</td></tr>'}
@@ -2142,8 +2111,33 @@ Supported actions:
         bindDailyCheckinHandlers(el);
         document.getElementById('importSchedulePdfBtn').addEventListener('click', () => openSmartImportModal('schedule'));
         document.getElementById('attMonthPick').addEventListener('change', (e) => { selectedAttMonth = e.target.value; renderAttendance(el); });
-        document.getElementById('calMonthPick').addEventListener('change', (e) => { selectedAttMonth = e.target.value; selectedAttDate = selectedAttMonth + '-01'; renderAttendance(el); });
-        el.querySelectorAll('[data-cal-date]').forEach(b => b.addEventListener('click', () => { selectedAttDate = b.dataset.calDate; renderAttendance(el); }));
+
+        el.querySelectorAll('[data-mo-edit]').forEach(inp => inp.addEventListener('change', () => {
+          const [key, field, subject, type] = inp.dataset.moEdit.split('|');
+          const val = Math.max(0, parseInt(inp.value, 10) || 0);
+          if (!state.monthlyManualOverrides) state.monthlyManualOverrides = {};
+          if (!state.monthlyManualOverrides[selectedAttMonth]) state.monthlyManualOverrides[selectedAttMonth] = {};
+          if (!state.monthlyManualOverrides[selectedAttMonth][key]) state.monthlyManualOverrides[selectedAttMonth][key] = { subject, type };
+          state.monthlyManualOverrides[selectedAttMonth][key][field] = val;
+
+          // Update monthly snapshot for selectedAttMonth
+          const rows = computeMonthlyAttendance(selectedAttMonth);
+          let thA = 0, thT = 0, prA = 0, prT = 0;
+          rows.forEach(r => {
+            if (r.type === 'Theory') { thA += r.present; thT += r.present + r.absent; }
+            else { prA += r.present; prT += r.present + r.absent; }
+          });
+          const tot = thT + prT, att = thA + prA;
+          if (!state.monthlySnapshots) state.monthlySnapshots = {};
+          state.monthlySnapshots[selectedAttMonth] = {
+            month: selectedAttMonth,
+            theoryPct: thT ? Math.round((thA / thT) * 1000) / 10 : null,
+            practicalPct: prT ? Math.round((prA / prT) * 1000) / 10 : null,
+            overallPct: tot ? Math.round((att / tot) * 1000) / 10 : 0,
+            attended: att, total: tot, savedAt: new Date().toISOString()
+          };
+          saveState(); renderAttendance(el);
+        }));
         document.getElementById('saveMonthSnapBtn').addEventListener('click', () => {
           recomputeAttendanceAndMonthly();
           saveState(); renderAttendance(el);
