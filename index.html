@@ -138,24 +138,24 @@
         <button id="closeSyncModal" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">✕</button>
       </div>
 
-      <!-- Automatic Cloud Sync (Firebase Realtime DB) -->
+      <!-- Automatic Cloud Sync (GitHub Secret Gist) -->
       <div class="p-4 rounded-xl border-2 border-teal-500/40 bg-teal-50/40 dark:bg-teal-950/20 space-y-3">
         <div class="flex items-center justify-between">
           <div>
             <h4 class="font-bold text-sm text-teal-800 dark:text-teal-200 flex items-center gap-2">
               <span id="cloudSyncDot" class="w-2 h-2 rounded-full bg-slate-400"></span>
-              Automatic Cloud Sync (Zero-Effort)
+              Automatic Cloud Sync (GitHub Gist — Free &amp; No Expiry)
             </h4>
-            <p class="text-xs text-slate-600 dark:text-slate-300">Paste your free Firebase Realtime Database URL + a private Room ID once on each device. Every edit syncs automatically.</p>
+            <p class="text-xs text-slate-600 dark:text-slate-300">Paste a GitHub Token (with <code>gist</code> scope). Leave Gist ID blank on your 1st device to auto-create one, then copy that Gist ID to your 2nd device.</p>
           </div>
           <span id="cloudSyncBadge" class="text-[11px] px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 font-semibold">Off</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <input id="cloudDbUrlIn" type="url" class="px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" placeholder="https://your-app-default-rtdb.firebaseio.com">
-          <input id="cloudRoomIdIn" type="text" class="px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900" placeholder="Private Sync Room ID (e.g., amitya-mbbs)">
+          <input id="gistTokenIn" type="password" class="px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="GitHub Token (ghp_... or github_pat_...)">
+          <input id="gistIdIn" type="text" class="px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Gist ID (leave blank to auto-create)">
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <button id="cloudConnectBtn" class="px-4 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">Connect & Auto-Sync</button>
+          <button id="cloudConnectBtn" class="px-4 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">Connect &amp; Auto-Sync</button>
           <button id="cloudPullNowBtn" class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">Pull Now</button>
           <button id="cloudDisconnectBtn" class="px-3 py-1.5 rounded-xl text-rose-600 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-900/20">Disconnect</button>
         </div>
@@ -2716,20 +2716,16 @@
       function closeAppModal() {
         const m = document.getElementById('appModal'); m.classList.add('hidden'); m.classList.remove('flex');
       }
-      // Automatic Cloud Sync Engine (Firebase RTDB REST)
-      const CLOUD_CFG_KEY = 'medpulse_cloud_cfg_v1';
-      let cloudCfg = (() => {
-        try { return JSON.parse(localStorage.getItem(CLOUD_CFG_KEY)) || { url: '', room: '' }; }
-        catch (e) { return { url: '', room: '' }; }
+      // Automatic Cloud Sync Engine (GitHub Secret Gist API)
+      const GIST_CFG_KEY = 'medpulse_gist_cfg_v1';
+      let gistCfg = (() => {
+        try { return JSON.parse(localStorage.getItem(GIST_CFG_KEY)) || { token: '', gistId: '' }; }
+        catch (e) { return { token: '', gistId: '' }; }
       })();
       let cloudPushTimer = null;
 
-      function getCloudEndpoint() {
-        if (!cloudCfg.url || !cloudCfg.room) return null;
-        const base = cloudCfg.url.trim().replace(/\/+$/, '');
-        const safeRoom = cloudCfg.room.trim().replace(/[^a-zA-Z0-9_-]/g, '');
-        if (!base.startsWith('https://') || !safeRoom) return null;
-        return `${base}/medpulse/${safeRoom}.json`;
+      function isGistReady() {
+        return !!(gistCfg.token && gistCfg.gistId);
       }
 
       function updateCloudBadge(statusText, isLive) {
@@ -2738,19 +2734,26 @@
         const sb = document.getElementById('syncPeerBadge');
         if (b) b.textContent = statusText;
         if (d) d.className = 'w-2 h-2 rounded-full ' + (isLive ? 'bg-emerald-500' : 'bg-slate-400');
-        if (sb && isLive) sb.textContent = 'Cloud Live';
+        if (sb && isLive) sb.textContent = 'Gist Live';
+      }
+
+      function getSlimStateJson() {
+        const slim = JSON.parse(JSON.stringify(state));
+        slim.pdfs = slim.pdfs.map(p => p.dataUrl && p.dataUrl.length > 150000 ? Object.assign({}, p, { dataUrl: null }) : p);
+        return JSON.stringify(slim);
       }
 
       async function pushToCloud() {
-        const ep = getCloudEndpoint();
-        if (!ep) return;
+        if (!isGistReady()) return;
         try {
-          const slim = JSON.parse(JSON.stringify(state));
-          slim.pdfs = slim.pdfs.map(p => p.dataUrl && p.dataUrl.length > 150000 ? Object.assign({}, p, { dataUrl: null }) : p);
-          const res = await fetch(ep, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(slim)
+          const res = await fetch(`https://api.github.com/gists/${gistCfg.gistId}`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${gistCfg.token}`,
+              'Accept': 'application/vnd.github+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ files: { 'medpulse_sync.json': { content: getSlimStateJson() } } })
           });
           if (res.ok) updateCloudBadge('Synced', true);
           else updateCloudBadge('Error ' + res.status, false);
@@ -2760,64 +2763,100 @@
       }
 
       function scheduleCloudPush() {
-        if (!getCloudEndpoint()) return;
+        if (!isGistReady()) return;
         clearTimeout(cloudPushTimer);
-        cloudPushTimer = setTimeout(pushToCloud, 900);
+        cloudPushTimer = setTimeout(pushToCloud, 1000);
       }
 
       async function pullFromCloud(showMsg) {
-        const ep = getCloudEndpoint();
-        if (!ep) return;
+        if (!isGistReady()) return;
         try {
-          const res = await fetch(ep);
-          if (!res.ok) return;
-          const remote = await res.json();
-          if (remote && remote.lastSynced && (!state.lastSynced || new Date(remote.lastSynced) > new Date(state.lastSynced))) {
-            applyIncomingSync(remote, 'Cloud');
-            updateCloudBadge('Synced', true);
-          } else {
-            updateCloudBadge('Synced', true);
-            if (showMsg) showToast('Already up to date with Cloud', 'info');
+          const res = await fetch(`https://api.github.com/gists/${gistCfg.gistId}`, {
+            headers: {
+              'Authorization': `Bearer ${gistCfg.token}`,
+              'Accept': 'application/vnd.github+json'
+            },
+            cache: 'no-store'
+          });
+          if (!res.ok) { updateCloudBadge('Error ' + res.status, false); return; }
+          const data = await res.json();
+          const fileObj = data.files && data.files['medpulse_sync.json'];
+          if (fileObj && fileObj.content) {
+            const remote = JSON.parse(fileObj.content);
+            if (remote && remote.lastSynced && (!state.lastSynced || new Date(remote.lastSynced) > new Date(state.lastSynced))) {
+              applyIncomingSync(remote, 'GitHub Gist');
+              updateCloudBadge('Synced', true);
+              return;
+            }
           }
+          updateCloudBadge('Synced', true);
+          if (showMsg) showToast('Already up to date with GitHub Gist', 'info');
         } catch (e) {
           updateCloudBadge('Offline', false);
         }
       }
 
       document.getElementById('cloudConnectBtn').addEventListener('click', async () => {
-        const url = document.getElementById('cloudDbUrlIn').value.trim();
-        const room = document.getElementById('cloudRoomIdIn').value.trim();
-        if (!url.startsWith('https://') || !room) {
-          showToast('Enter a valid https:// Firebase URL and a Room ID', 'error'); return;
-        }
-        cloudCfg = { url, room };
-        try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg)); } catch (e) {}
+        const token = document.getElementById('gistTokenIn').value.trim();
+        let gistId = document.getElementById('gistIdIn').value.trim();
+        if (!token) { showToast('Paste your GitHub Personal Access Token first', 'error'); return; }
         updateCloudBadge('Connecting...', true);
+        if (!gistId) {
+          try {
+            const res = await fetch('https://api.github.com/gists', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/vnd.github+json',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                description: 'MedPulse MBBS Auto-Sync Store',
+                public: false,
+                files: { 'medpulse_sync.json': { content: getSlimStateJson() } }
+              })
+            });
+            if (!res.ok) {
+              updateCloudBadge('Auth Error', false);
+              showToast('Token rejected (' + res.status + '). Ensure gist permission is enabled.', 'error');
+              return;
+            }
+            const created = await res.json();
+            gistId = created.id;
+            document.getElementById('gistIdIn').value = gistId;
+          } catch (e) {
+            updateCloudBadge('Offline', false);
+            showToast('Could not reach GitHub API', 'error');
+            return;
+          }
+        }
+        gistCfg = { token, gistId };
+        try { localStorage.setItem(GIST_CFG_KEY, JSON.stringify(gistCfg)); } catch (e) {}
         await pullFromCloud(false);
         await pushToCloud();
-        showToast('Automatic Cloud Sync connected!', 'success');
+        showToast('GitHub Gist Auto-Sync active! Copy Gist ID to your other device.', 'success');
       });
 
       document.getElementById('cloudPullNowBtn').addEventListener('click', () => pullFromCloud(true));
       document.getElementById('cloudDisconnectBtn').addEventListener('click', () => {
-        cloudCfg = { url: '', room: '' };
-        try { localStorage.removeItem(CLOUD_CFG_KEY); } catch (e) {}
+        gistCfg = { token: '', gistId: '' };
+        try { localStorage.removeItem(GIST_CFG_KEY); } catch (e) {}
         updateCloudBadge('Off', false);
         document.getElementById('syncPeerBadge').textContent = 'Ready';
-        showToast('Cloud Sync disconnected', 'info');
+        showToast('GitHub Gist Sync disconnected', 'info');
       });
 
-      if (getCloudEndpoint()) {
+      if (isGistReady()) {
         updateCloudBadge('Connecting...', true);
         pullFromCloud(false);
       }
-      setInterval(() => { if (getCloudEndpoint() && !document.hidden) pullFromCloud(false); }, 8000);
-      window.addEventListener('focus', () => { if (getCloudEndpoint()) pullFromCloud(false); });
+      setInterval(() => { if (isGistReady() && !document.hidden) pullFromCloud(false); }, 15000);
+      window.addEventListener('focus', () => { if (isGistReady()) pullFromCloud(false); });
 
       function openSyncModal() {
         document.getElementById('deviceNameInput').value = state.deviceName || 'My Study Device';
-        document.getElementById('cloudDbUrlIn').value = cloudCfg.url || '';
-        document.getElementById('cloudRoomIdIn').value = cloudCfg.room || '';
+        document.getElementById('gistTokenIn').value = gistCfg.token || '';
+        document.getElementById('gistIdIn').value = gistCfg.gistId || '';
         document.getElementById('lastSyncedLabel').textContent = 'Last saved: ' + new Date(state.lastSynced).toLocaleTimeString();
         const m = document.getElementById('syncModal'); m.classList.remove('hidden'); m.classList.add('flex');
       }
