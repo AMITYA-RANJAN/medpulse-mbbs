@@ -2097,7 +2097,11 @@ Supported actions:
                         <div class="${barColor} h-full rounded-full transition-all" style="width:${Math.min(100, adv.pct)}%"></div>
                       </div>
                       <div class="flex items-center justify-between text-xs text-slate-500 mt-2">
-                        <span>Attended: <strong>${a.attended}/${a.total}</strong></span>
+                        <span class="flex items-center gap-1">Attended:
+                          <input type="number" min="0" value="${a.attended}" data-card-att="${a.id}" class="w-12 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-center">
+                          /
+                          <input type="number" min="0" value="${a.total}" data-card-tot="${a.id}" class="w-12 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-center">
+                        </span>
                         <button data-del-att="${a.id}" class="text-slate-400 hover:text-rose-600 text-[11px]">Remove</button>
                       </div>
                       <p class="text-xs mt-1.5 font-medium ${adv.status === 'danger' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-300'}">${adv.msg}</p>
@@ -2122,6 +2126,17 @@ Supported actions:
           if (!state.monthlyManualOverrides[selectedAttMonth]) state.monthlyManualOverrides[selectedAttMonth] = {};
           if (!state.monthlyManualOverrides[selectedAttMonth][key]) state.monthlyManualOverrides[selectedAttMonth][key] = { subject, type };
           state.monthlyManualOverrides[selectedAttMonth][key][field] = val;
+          // Sync with cumulative subject card
+          let card = state.attendance.find(a => a.subject === subject && a.type === type);
+          if (!card) {
+            card = { id: 'a_' + Date.now(), subject, type, attended: 0, total: 0, target: type === 'Theory' ? 75 : 80 };
+            state.attendance.push(card);
+          }
+          const curOv = state.monthlyManualOverrides[selectedAttMonth][key];
+          if (curOv.present !== undefined) card.attended = curOv.present;
+          if (curOv.present !== undefined || curOv.absent !== undefined) {
+            card.total = (curOv.present || 0) + (curOv.absent || 0);
+          }
 
           // Update monthly snapshot for selectedAttMonth
           const rows = computeMonthlyAttendance(selectedAttMonth);
@@ -2195,7 +2210,21 @@ Supported actions:
           showToast(`Removed ${key} from ${selectedAttMonth}`, 'info');
         }));
         document.getElementById('saveMonthSnapBtn').addEventListener('click', () => {
-          recomputeAttendanceAndMonthly();
+          const rows = computeMonthlyAttendance(selectedAttMonth);
+          let thA = 0, thT = 0, prA = 0, prT = 0;
+          rows.forEach(r => {
+            if (r.type === 'Theory') { thA += r.present; thT += r.present + r.absent; }
+            else { prA += r.present; prT += r.present + r.absent; }
+          });
+          const tot = thT + prT, att = thA + prA;
+          if (!state.monthlySnapshots) state.monthlySnapshots = {};
+          state.monthlySnapshots[selectedAttMonth] = {
+            month: selectedAttMonth,
+            theoryPct: thT ? Math.round((thA / thT) * 1000) / 10 : null,
+            practicalPct: prT ? Math.round((prA / prT) * 1000) / 10 : null,
+            overallPct: tot ? Math.round((att / tot) * 1000) / 10 : 0,
+            attended: att, total: tot, savedAt: new Date().toISOString()
+          };
           saveState(); renderAttendance(el);
           showToast(`Saved ${selectedAttMonth} attendance snapshot!`, 'success');
         });
@@ -2231,8 +2260,11 @@ Supported actions:
             document.getElementById('confirmResetAttBtn').addEventListener('click', () => {
               state.attendance.forEach(a => { a.attended = 0; a.total = 0; });
               state.dailyAttendanceLog = {};
+              state.monthlyManualOverrides = {};
+              state.monthlyHiddenRows = {};
+              state.monthlySnapshots = {};
               saveState(); closeAppModal(); renderAttendance(el);
-              showToast('Attendance counts & daily logs reset to 0', 'success');
+              showToast('All attendance counts, monthly edits & logs reset to 0', 'success');
             });
           });
         });
@@ -2291,6 +2323,14 @@ Supported actions:
         el.querySelectorAll('[data-del-hol]').forEach(b => b.addEventListener('click', () => {
           state.holidays = state.holidays.filter(h => h.id !== b.dataset.delHol);
           saveState(); renderAttendance(el);
+        }));
+        el.querySelectorAll('[data-card-att]').forEach(inp => inp.addEventListener('change', () => {
+          const item = state.attendance.find(x => x.id === inp.dataset.cardAtt);
+          if (item) { item.attended = Math.max(0, parseInt(inp.value, 10) || 0); if (item.total < item.attended) item.total = item.attended; saveState(); renderAttendance(el); }
+        }));
+        el.querySelectorAll('[data-card-tot]').forEach(inp => inp.addEventListener('change', () => {
+          const item = state.attendance.find(x => x.id === inp.dataset.cardTot);
+          if (item) { item.total = Math.max(item.attended, parseInt(inp.value, 10) || 0); saveState(); renderAttendance(el); }
         }));
         el.querySelectorAll('[data-att-plus]').forEach(b => b.addEventListener('click', () => {
           const item = state.attendance.find(x => x.id === b.dataset.attPlus);
