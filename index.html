@@ -1,0 +1,2675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedPulse — 3rd Year MBBS Study Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: {
+              50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 500: '#14b8a6',
+              600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .pdf-page-wrap { position: relative; margin: 0 auto 20px auto; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.12); background: #fff; user-select: text; }
+    .pdf-text-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; opacity: 1; line-height: 1.0; pointer-events: auto; }
+    .pdf-text-layer span { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+    .pdf-text-layer span::selection { background: rgba(59, 130, 246, 0.32); }
+    .pdf-text-layer span.kb-cursor { outline: 2px solid #0d9488; background: rgba(20, 184, 166, 0.18); border-radius: 2px; }
+    .pdf-text-layer span.kb-selected { background: rgba(59, 130, 246, 0.28); border-radius: 2px; }
+    .pdf-draw-layer { position: absolute; left: 0; top: 0; pointer-events: none; }
+    .pdf-draw-layer.active-draw { pointer-events: auto; cursor: crosshair; }
+    .pdf-ann-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; }
+    .pdf-ann-item { position: absolute; pointer-events: auto; }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .dark .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; }
+    @keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 0.7; } 70% { transform: scale(1.06); opacity: 0; } 100% { transform: scale(1.06); opacity: 0; } }
+    .pulse-ring { animation: pulse-ring 2s infinite; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased selection:bg-teal-200 selection:text-teal-900">
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+  <!-- App Shell -->
+  <div class="min-h-screen flex flex-col lg:flex-row">
+    <!-- Desktop Sidebar -->
+    <aside class="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-30">
+      <div class="p-5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800">
+        <div class="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">M</div>
+        <div>
+          <h1 class="font-bold text-base tracking-tight leading-tight">MedPulse</h1>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">3rd Year MBBS (Phase III)</p>
+        </div>
+      </div>
+      <nav id="desktopNav" class="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-thin"></nav>
+      <div class="p-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+        <button id="manageSubjectsBtnSidebar" class="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 dark:hover:bg-teal-900/50 text-teal-800 dark:text-teal-200 text-xs font-semibold transition">
+          <span>✎ Edit Subjects</span>
+          <span id="subjectCountBadge" class="text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-800"></span>
+        </button>
+        <button id="openSyncBtnSidebar" class="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/30 text-xs font-medium transition">
+          <span class="flex items-center gap-2">
+            <span id="syncDotSidebar" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Cross-Device Sync
+          </span>
+          <span id="syncPeerBadge" class="text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300">Ready</span>
+        </button>
+        <div class="flex items-center justify-between px-2 pt-1">
+          <span class="text-[11px] text-slate-400">Theme</span>
+          <button id="themeToggleDesktop" class="text-xs px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition font-medium">Dark Mode</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Area -->
+    <div class="flex-1 lg:pl-64 flex flex-col min-w-0">
+      <!-- Top Bar -->
+      <header class="sticky top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <button id="mobileMenuBtn" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <h2 id="pageTitle" class="font-bold text-base sm:text-lg truncate">Dashboard</h2>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="miniPomoBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-semibold hover:bg-teal-100 transition">
+            <span id="miniPomoDot" class="w-2 h-2 rounded-full bg-teal-500"></span>
+            <span id="miniPomoTime">25:00</span>
+          </button>
+          <button id="openSyncBtnTop" class="lg:hidden px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium">Sync</button>
+          <button id="themeToggleMobile" class="lg:hidden p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs" title="Toggle Theme">◐</button>
+        </div>
+      </header>
+
+      <!-- Mobile Drawer -->
+      <div id="mobileDrawer" class="fixed inset-0 z-40 hidden lg:hidden">
+        <div id="mobileDrawerBackdrop" class="fixed inset-0 bg-slate-900/50"></div>
+        <div class="fixed inset-y-0 left-0 w-64 bg-white dark:bg-slate-900 p-4 flex flex-col z-50 shadow-xl">
+          <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+            <span class="font-bold text-base">MedPulse 3rd Yr</span>
+            <button id="closeMobileDrawer" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">✕</button>
+          </div>
+          <nav id="mobileNav" class="flex-1 py-3 space-y-1 overflow-y-auto"></nav>
+          <button id="manageSubjectsBtnMobile" class="mt-2 w-full py-2 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs font-semibold">✎ Edit Subjects</button>
+        </div>
+      </div>
+
+      <!-- Dynamic View Container -->
+      <main id="mainView" class="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto"></main>
+    </div>
+  </div>
+
+  <!-- Cross-Device Sync Modal -->
+  <div id="syncModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 space-y-5">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+        <div>
+          <h3 class="font-bold text-lg">Cross-Device Connection & Sync</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Sync your 3rd year tasks, attendance, schedule, notes, syllabus & PDFs across devices</p>
+        </div>
+        <button id="closeSyncModal" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">✕</button>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">This Device Name</label>
+          <div class="flex gap-2">
+            <input id="deviceNameInput" type="text" class="flex-1 px-2.5 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900" placeholder="e.g., Hostel Laptop">
+            <button id="saveDeviceNameBtn" class="px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">Save</button>
+          </div>
+        </div>
+        <div class="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Same-Browser Live Tab Sync</div>
+          <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">BroadcastChannel active. Changes sync instantly across open tabs on this device.</p>
+          <p id="lastSyncedLabel" class="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-medium"></p>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h4 class="font-semibold text-sm flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+              Direct P2P Device Link (WebRTC)
+            </h4>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Connect Laptop ↔ Phone/Tablet directly without a server by exchanging a pairing code.</p>
+          </div>
+          <span id="rtcStatusBadge" class="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-medium">Disconnected</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div class="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+            <div class="font-semibold text-slate-700 dark:text-slate-200">Device A (Host): Create Offer</div>
+            <button id="rtcCreateOfferBtn" class="w-full py-1.5 px-3 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">1. Generate Offer Code</button>
+            <textarea id="rtcOfferOut" rows="3" readonly class="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] font-mono" placeholder="Offer code appears here..."></textarea>
+            <div class="flex gap-2">
+              <input id="rtcAnswerIn" type="text" class="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] font-mono" placeholder="3. Paste Answer from Device B">
+              <button id="rtcAcceptAnswerBtn" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700">Connect</button>
+            </div>
+          </div>
+
+          <div class="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+            <div class="font-semibold text-slate-700 dark:text-slate-200">Device B (Join): Accept Offer</div>
+            <textarea id="rtcOfferIn" rows="2" class="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] font-mono" placeholder="2. Paste Offer code from Device A"></textarea>
+            <button id="rtcCreateAnswerBtn" class="w-full py-1.5 px-3 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700">Generate Answer Code</button>
+            <textarea id="rtcAnswerOut" rows="2" readonly class="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] font-mono" placeholder="Send this Answer back to Device A..."></textarea>
+          </div>
+        </div>
+        <div id="rtcConnectedActions" class="hidden flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+          <span class="text-xs text-emerald-600 font-semibold">P2P DataChannel Open!</span>
+          <button id="rtcPushNowBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Push All Data to Peer Now</button>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+        <h4 class="font-semibold text-sm">Instant Sync Code & Backup File</h4>
+        <div class="flex flex-wrap gap-2">
+          <button id="copySyncCodeBtn" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">Copy Sync Code</button>
+          <button id="downloadBackupBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-700 text-white text-xs font-semibold hover:bg-slate-900">Download .JSON Backup</button>
+          <label class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-semibold cursor-pointer">
+            Import .JSON Backup
+            <input id="importBackupInput" type="file" accept=".json,application/json" class="hidden">
+          </label>
+        </div>
+        <div class="flex gap-2">
+          <input id="pasteSyncCodeInput" type="text" class="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Paste Sync Code from another device to merge/restore...">
+          <button id="applySyncCodeBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Apply Code</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic In-App Modal -->
+  <div id="appModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div id="appModalContent" class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-800 p-5"></div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      if (window.pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+
+      const STORAGE_KEY = 'medpulse_mbbs_v2';
+      const CHANNEL_NAME = 'medpulse_sync_v2';
+
+      const COLOR_PALETTE = [
+        { id: 'teal', label: 'Teal', cls: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300' },
+        { id: 'indigo', label: 'Indigo', cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' },
+        { id: 'rose', label: 'Rose', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' },
+        { id: 'emerald', label: 'Emerald', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
+        { id: 'amber', label: 'Amber', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
+        { id: 'cyan', label: 'Cyan', cls: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300' },
+        { id: 'purple', label: 'Purple', cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
+        { id: 'slate', label: 'Slate', cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }
+      ];
+
+      const DEFAULT_SUBJECTS = [
+        { id: 'sub_psm', name: 'Community Medicine', color: 'emerald' },
+        { id: 'sub_oph', name: 'Ophthalmology', color: 'cyan' },
+        { id: 'sub_ent', name: 'ENT', color: 'indigo' },
+        { id: 'sub_fmt', name: 'Forensic Medicine', color: 'amber' },
+        { id: 'sub_med', name: 'General Medicine', color: 'rose' },
+        { id: 'sub_surg', name: 'General Surgery', color: 'purple' },
+        { id: 'sub_obg', name: 'OBGYN', color: 'rose' },
+        { id: 'sub_ped', name: 'Pediatrics', color: 'teal' },
+        { id: 'sub_clin', name: 'Clinical Postings', color: 'cyan' },
+        { id: 'sub_aet', name: 'AETCOM', color: 'purple' },
+        { id: 'sub_gen', name: 'General', color: 'slate' }
+      ];
+
+      const DEFAULT_SYLLABUS = [
+        {
+          id: 'psm', subject: 'Community Medicine', units: [
+            { id: 'cm1', title: 'Concept of Health & Disease, Epidemiology Principles', highYield: true, done: true },
+            { id: 'cm2', title: 'Biostatistics, Sampling & Screening Tests', highYield: true, done: true },
+            { id: 'cm3', title: 'Communicable & Non-Communicable Diseases', highYield: true, done: false },
+            { id: 'cm4', title: 'National Health Programmes & Immunization Schedule', highYield: true, done: false },
+            { id: 'cm5', title: 'Maternal & Child Health (RMNCH+A), Nutrition', highYield: true, done: false },
+            { id: 'cm6', title: 'Environment, Occupational Health & Biomedical Waste', highYield: false, done: false }
+          ]
+        },
+        {
+          id: 'oph', subject: 'Ophthalmology', units: [
+            { id: 'op1', title: 'Anatomy of Eye, Optics & Refractive Errors', highYield: true, done: true },
+            { id: 'op2', title: 'Diseases of Conjunctiva, Cornea & Sclera', highYield: true, done: false },
+            { id: 'op3', title: 'Lens & Cataract Surgery + IOL Complications', highYield: true, done: false },
+            { id: 'op4', title: 'Glaucoma (POAG, PACG) & Ocular Pharmacology', highYield: true, done: false },
+            { id: 'op5', title: 'Uveitis, Retina (Diabetic/Hypertensive Retinopathy) & Optic Nerve', highYield: true, done: false }
+          ]
+        },
+        {
+          id: 'ent', subject: 'ENT', units: [
+            { id: 'en1', title: 'Ear: CSOM, ASOM, Otosclerosis, Meniere Disease & Tuning Fork Tests', highYield: true, done: true },
+            { id: 'en2', title: 'Nose & PNS: Epistaxis, Sinusitis, Nasal Polyps & Deviated Septum', highYield: true, done: false },
+            { id: 'en3', title: 'Pharynx: Tonsillitis, Quinsy, Nasopharyngeal Carcinoma', highYield: true, done: false },
+            { id: 'en4', title: 'Larynx & Neck: Vocal Cord Palsy, Stridor, Tracheostomy', highYield: true, done: false }
+          ]
+        },
+        {
+          id: 'fmt', subject: 'Forensic Medicine', units: [
+            { id: 'fm1', title: 'Indian Legal System, Courts & Medical Jurisprudence', highYield: true, done: true },
+            { id: 'fm2', title: 'Personal Identity, Thanatology & Postmortem Changes', highYield: true, done: false },
+            { id: 'fm3', title: 'Mechanical Injuries, Ballistics & Violent Asphyxial Deaths', highYield: true, done: false },
+            { id: 'fm4', title: 'Clinical Toxicology (OP Poisoning, Snakes, Heavy Metals)', highYield: true, done: false }
+          ]
+        }
+      ];
+
+      const DEFAULT_SCHEDULE = [
+        { id: 'sc1', day: 'Monday', time: '08:00 - 09:00', subject: 'Community Medicine', type: 'Theory' },
+        { id: 'sc2', day: 'Monday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc3', day: 'Monday', time: '14:00 - 15:00', subject: 'Ophthalmology', type: 'Theory' },
+        { id: 'sc4', day: 'Tuesday', time: '08:00 - 09:00', subject: 'ENT', type: 'Theory' },
+        { id: 'sc5', day: 'Tuesday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc6', day: 'Tuesday', time: '14:00 - 16:00', subject: 'Community Medicine', type: 'Practical' },
+        { id: 'sc7', day: 'Wednesday', time: '08:00 - 09:00', subject: 'Ophthalmology', type: 'Theory' },
+        { id: 'sc8', day: 'Wednesday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc9', day: 'Wednesday', time: '14:00 - 15:00', subject: 'Forensic Medicine', type: 'Theory' },
+        { id: 'sc10', day: 'Thursday', time: '08:00 - 09:00', subject: 'Community Medicine', type: 'Theory' },
+        { id: 'sc11', day: 'Thursday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc12', day: 'Thursday', time: '14:00 - 16:00', subject: 'ENT', type: 'Practical' },
+        { id: 'sc13', day: 'Friday', time: '08:00 - 09:00', subject: 'Ophthalmology', type: 'Practical' },
+        { id: 'sc14', day: 'Friday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc15', day: 'Friday', time: '14:00 - 15:00', subject: 'ENT', type: 'Theory' },
+        { id: 'sc16', day: 'Saturday', time: '08:00 - 09:00', subject: 'AETCOM', type: 'Theory' },
+        { id: 'sc17', day: 'Saturday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' }
+      ];
+
+      const DEFAULT_MESS_MENU = {
+        Monday: { Breakfast: 'Aloo Paratha, Curd, Pickle, Tea/Coffee', Lunch: 'Rice, Dal Tadka, Jeera Aloo, Roti, Salad', Snacks: 'Samosa & Chutney, Tea', Dinner: 'Roti, Paneer Butter Masala, Rice, Gulab Jamun' },
+        Tuesday: { Breakfast: 'Poha, Boiled Eggs / Sprouts, Banana, Tea', Lunch: 'Rajma Chawal, Mix Veg, Roti, Boondi Raita', Snacks: 'Bread Pakora, Tea/Coffee', Dinner: 'Roti, Chicken Curry / Kadai Paneer, Dal, Rice' },
+        Wednesday: { Breakfast: 'Idli, Sambar, Coconut Chutney, Milk/Tea', Lunch: 'Kadhi Pakora, Rice, Bhindi Fry, Roti', Snacks: 'Veg Maggi / Chowmein, Tea', Dinner: 'Roti, Egg Curry / Matar Paneer, Jeera Rice, Kheer' },
+        Thursday: { Breakfast: 'Chole Bhature / Puri Sabzi, Tea', Lunch: 'Dal Makhani, Rice, Aloo Gobi, Roti, Papad', Snacks: 'Aloo Tikki Chaat, Coffee', Dinner: 'Roti, Soyabean Masala, Dal Fry, Rice' },
+        Friday: { Breakfast: 'Masala Dosa, Sambar, Chutney, Tea', Lunch: 'Chana Dal, Veg Pulao, Paneer Bhurji, Roti', Snacks: 'Biscuits & Namkeen, Tea/Coffee', Dinner: 'Chicken Biryani / Veg Biryani, Raita, Salan' },
+        Saturday: { Breakfast: 'Paneer Paratha / Sandwich, Curd, Tea', Lunch: 'Khichdi, Chokha, Papad, Pickle, Curd', Snacks: 'Onion Pakoda, Mint Chutney, Tea', Dinner: 'Roti, Chole Masala, Rice, Suji Halwa' },
+        Sunday: { Breakfast: 'Pav Bhaji / Omelette-Bread, Milk/Tea', Lunch: 'Special Thali: Pulao, Dal, Paneer/Chicken, Naan, Sweet', Snacks: 'Pasta / Veg Roll, Tea', Dinner: 'Light Dinner: Roti, Moong Dal, Mix Veg, Rice' }
+      };
+
+      function getDefaultState() {
+        const now = new Date();
+        const addDays = (d) => new Date(now.getTime() + d * 86400000).toISOString().slice(0, 10);
+        return {
+          deviceName: 'My Study Device',
+          lastSynced: new Date().toISOString(),
+          darkMode: false,
+          activeTab: 'dashboard',
+          subjects: JSON.parse(JSON.stringify(DEFAULT_SUBJECTS)),
+          todos: [
+            { id: 't1', text: 'Complete Park PSM Epidemiology & Screening QBank (Marrow)', subject: 'Community Medicine', priority: 'High', due: addDays(0), done: false },
+            { id: 't2', text: 'Revise Glaucoma & Cataract surgery steps (Khurana)', subject: 'Ophthalmology', priority: 'High', due: addDays(1), done: false },
+            { id: 't3', text: 'Practice Tuning Fork Tests & CSOM Viva questions', subject: 'ENT', priority: 'Medium', due: addDays(2), done: true },
+            { id: 't4', text: 'Prepare Medicine Ward Case Presentation', subject: 'Clinical Postings', priority: 'Medium', due: addDays(3), done: false }
+          ],
+          attendance: [
+            { id: 'a1', subject: 'Community Medicine', type: 'Theory', attended: 28, total: 35, target: 75 },
+            { id: 'a2', subject: 'Community Medicine', type: 'Practical', attended: 15, total: 18, target: 80 },
+            { id: 'a3', subject: 'Ophthalmology', type: 'Theory', attended: 22, total: 30, target: 75 },
+            { id: 'a4', subject: 'Ophthalmology', type: 'Practical', attended: 14, total: 16, target: 80 },
+            { id: 'a5', subject: 'ENT', type: 'Theory', attended: 24, total: 29, target: 75 },
+            { id: 'a6', subject: 'ENT', type: 'Practical', attended: 13, total: 16, target: 80 },
+            { id: 'a7', subject: 'Forensic Medicine', type: 'Theory', attended: 19, total: 24, target: 75 },
+            { id: 'a8', subject: 'Clinical Postings', type: 'Practical', attended: 26, total: 30, target: 80 },
+            { id: 'a9', subject: 'AETCOM', type: 'Theory', attended: 7, total: 8, target: 75 }
+          ],
+          schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)),
+          holidays: [
+            { id: 'hol1', date: addDays(7), name: 'Gazetted Holiday' }
+          ],
+          dailyAttendanceLog: {},
+          excludeSundays: true,
+          syllabus: DEFAULT_SYLLABUS,
+          messMenu: DEFAULT_MESS_MENU,
+          exams: [
+            { id: 'e1', title: '3rd Prof Internal Assessment I (PSM)', subject: 'Community Medicine', date: addDays(14), syllabusPct: 58, notes: 'Epidemiology, Biostatistics & Screening' },
+            { id: 'e2', title: 'Ophthalmology Clinical Ward End Exam', subject: 'Ophthalmology', date: addDays(21), syllabusPct: 45, notes: 'Cataract, Glaucoma & Ophthalmoscopy' },
+            { id: 'e3', title: 'Marrow Grand Test (Phase III)', subject: 'General', date: addDays(9), syllabusPct: 52, notes: '200 MCQs timed simulation' }
+          ],
+          notes: [
+            {
+              id: 'n1',
+              title: 'Tuning Fork Tests (Rinne & Weber) — ENT',
+              subject: 'ENT',
+              updatedAt: new Date().toISOString(),
+              content: '<h3>Quick Interpretation</h3><ul><li><strong>Normal:</strong> Rinne Positive (AC &gt; BC), Weber Central.</li><li><strong>Conductive Hearing Loss (CHL):</strong> Rinne Negative (BC &gt; AC), Weber lateralizes to <em>worse</em> ear.</li><li><strong>Sensorineural Hearing Loss (SNHL):</strong> Rinne Positive, Weber lateralizes to <em>better</em> ear.</li></ul><blockquote><strong>Clinical Pearl:</strong> False Negative Rinne occurs in severe unilateral SNHL due to transcranial bone conduction.</blockquote>'
+            },
+            {
+              id: 'n2',
+              title: 'Sensitivity vs Specificity & Predictive Values (PSM)',
+              subject: 'Community Medicine',
+              updatedAt: new Date().toISOString(),
+              content: '<p><strong>Sensitivity = TP / (TP + FN)</strong> (Rule OUT with SnNOut). <strong>Specificity = TN / (TN + FP)</strong> (Rule IN with SpPIn).</p><p><strong>PPV</strong> increases with higher disease prevalence; Sensitivity &amp; Specificity are independent of prevalence.</p>'
+            }
+          ],
+          pdfs: [
+            {
+              id: 'sample_3rd_pdf',
+              name: '3rd_Year_Ophthalmology_ENT_HighYield.pdf',
+              subject: 'Ophthalmology',
+              isSample: true,
+              annotations: {
+                1: {
+                  highlights: [
+                    { id: 'h_init_1', color: '#fef08a', kind: 'highlight', rects: [{ x: 0.08, y: 0.23, w: 0.56, h: 0.022 }] }
+                  ],
+                  strokes: [],
+                  notes: [
+                    { id: 'sn_init_1', x: 0.78, y: 0.23, text: 'High-yield for 3rd Prof IA & Marrow!' }
+                  ],
+                  textBoxes: []
+                }
+              },
+              bookmarks: [1]
+            }
+          ],
+          activePdfId: 'sample_3rd_pdf',
+          pomodoro: {
+            completedToday: 2,
+            totalMinutes: 50,
+            history: [
+              { id: 'ps1', subject: 'Community Medicine', minutes: 25, time: '09:30 AM' },
+              { id: 'ps2', subject: 'Ophthalmology', minutes: 25, time: '10:15 AM' }
+            ]
+          }
+        };
+      }
+
+      let state = loadState();
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            return Object.assign(getDefaultState(), parsed);
+          }
+        } catch (e) {}
+        return getDefaultState();
+      }
+
+      function getSubjectBadgeCls(subName) {
+        const found = (state.subjects || []).find(s => s.name.toLowerCase() === String(subName || '').toLowerCase());
+        const colId = found ? found.color : 'slate';
+        const pal = COLOR_PALETTE.find(p => p.id === colId) || COLOR_PALETTE[COLOR_PALETTE.length - 1];
+        return pal.cls;
+      }
+
+      function getSubjectNames() {
+        return (state.subjects || DEFAULT_SUBJECTS).map(s => s.name);
+      }
+
+      let bc = null;
+      try {
+        bc = new BroadcastChannel(CHANNEL_NAME);
+        bc.onmessage = (ev) => {
+          if (ev.data && ev.data.type === 'SYNC_STATE' && ev.data.payload) {
+            applyIncomingSync(ev.data.payload, 'Other Tab');
+          }
+        };
+      } catch (e) {}
+
+      // IndexedDB Binary Store for Large & Edited PDFs
+      const pdfMemoryCache = {};
+      function openPdfDB() {
+        return new Promise((resolve, reject) => {
+          try {
+            const req = indexedDB.open('medpulse_pdf_store', 1);
+            req.onupgradeneeded = () => {
+              if (!req.result.objectStoreNames.contains('pdfs')) req.result.createObjectStore('pdfs');
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          } catch (e) { reject(e); }
+        });
+      }
+      async function savePdfBytesToIDB(id, bytes) {
+        pdfMemoryCache[id] = bytes;
+        try {
+          const db = await openPdfDB();
+          await new Promise((res, rej) => {
+            const tx = db.transaction('pdfs', 'readwrite');
+            tx.objectStore('pdfs').put(bytes, id);
+            tx.oncomplete = () => res();
+            tx.onerror = () => rej(tx.error);
+          });
+        } catch (e) {}
+      }
+      async function loadPdfBytesFromIDB(id) {
+        if (pdfMemoryCache[id]) return pdfMemoryCache[id];
+        try {
+          const db = await openPdfDB();
+          const data = await new Promise((res, rej) => {
+            const tx = db.transaction('pdfs', 'readonly');
+            const req = tx.objectStore('pdfs').get(id);
+            req.onsuccess = () => res(req.result || null);
+            req.onerror = () => rej(req.error);
+          });
+          if (data) { pdfMemoryCache[id] = data instanceof Uint8Array ? data : new Uint8Array(data); return pdfMemoryCache[id]; }
+        } catch (e) {}
+        return null;
+      }
+      async function deletePdfBytesFromIDB(id) {
+        delete pdfMemoryCache[id];
+        try {
+          const db = await openPdfDB();
+          const tx = db.transaction('pdfs', 'readwrite');
+          tx.objectStore('pdfs').delete(id);
+        } catch (e) {}
+      }
+
+      function saveState(skipBroadcast) {
+        state.lastSynced = new Date().toISOString();
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+          try {
+            const slim = JSON.parse(JSON.stringify(state));
+            slim.pdfs = slim.pdfs.map(p => p.dataUrl && p.dataUrl.length > 500000 ? Object.assign({}, p, { dataUrl: null }) : p);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+          } catch (e2) {}
+        }
+        if (!skipBroadcast && bc) {
+          try { bc.postMessage({ type: 'SYNC_STATE', payload: state }); } catch (e) {}
+        }
+        if (!skipBroadcast && rtcChannel && rtcChannel.readyState === 'open') {
+          try { rtcChannel.send(JSON.stringify({ type: 'SYNC_STATE', payload: state })); } catch (e) {}
+        }
+        const lbl = document.getElementById('lastSyncedLabel');
+        if (lbl) lbl.textContent = 'Last saved: ' + new Date(state.lastSynced).toLocaleTimeString();
+      }
+
+      function showToast(msg, type = 'info') {
+        const c = document.getElementById('toastContainer');
+        const el = document.createElement('div');
+        const colors = type === 'success' ? 'bg-emerald-600 text-white' : type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white dark:bg-slate-700';
+        el.className = `${colors} px-4 py-2.5 rounded-xl shadow-lg text-xs font-medium pointer-events-auto transition-all`;
+        el.textContent = msg;
+        c.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+      }
+
+      function applyTheme() {
+        document.documentElement.classList.toggle('dark', !!state.darkMode);
+        const btn = document.getElementById('themeToggleDesktop');
+        if (btn) btn.textContent = state.darkMode ? 'Light Mode' : 'Dark Mode';
+      }
+      applyTheme();
+
+      const NAV_ITEMS = [
+        { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
+        { id: 'todos', label: 'To-Do List', icon: '✓' },
+        { id: 'attendance', label: 'Attendance & Schedule', icon: '◔' },
+        { id: 'syllabus', label: 'Syllabus', icon: '☰' },
+        { id: 'studio', label: 'Notes & PDF Editor', icon: '✎' },
+        { id: 'pomodoro', label: 'Pomodoro Focus', icon: '⏱' },
+        { id: 'exams', label: 'Upcoming Exams', icon: '⚑' },
+        { id: 'mess', label: 'Mess Menu', icon: '♨' }
+      ];
+
+      function renderNav() {
+        const badge = document.getElementById('subjectCountBadge');
+        if (badge) badge.textContent = (state.subjects || []).length;
+        const renderList = (containerId, closeMobile) => {
+          const el = document.getElementById(containerId);
+          if (!el) return;
+          el.innerHTML = NAV_ITEMS.map(item => {
+            const active = state.activeTab === item.id;
+            return `<button data-nav="${item.id}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${active ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+              <span class="text-base w-5 text-center">${item.icon}</span>
+              <span>${item.label}</span>
+            </button>`;
+          }).join('');
+          el.querySelectorAll('[data-nav]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              state.activeTab = btn.dataset.nav;
+              saveState(true);
+              renderNav();
+              renderMainView();
+              if (closeMobile) document.getElementById('mobileDrawer').classList.add('hidden');
+            });
+          });
+        };
+        renderList('desktopNav', false);
+        renderList('mobileNav', true);
+        const current = NAV_ITEMS.find(n => n.id === state.activeTab);
+        document.getElementById('pageTitle').textContent = current ? current.label : 'Dashboard';
+      }
+
+      // ================== SUBJECT MANAGER MODAL ==================
+      function openSubjectManager() {
+        const renderBody = () => {
+          openAppModal(`
+            <div class="space-y-4">
+              <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <div>
+                  <h3 class="font-bold text-base">Manage Subjects & Categories</h3>
+                  <p class="text-xs text-slate-500">Add, rename, or remove subjects across To-Dos, Attendance, Exams & Notes.</p>
+                </div>
+                <button id="cancelAppModal" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs">✕</button>
+              </div>
+              <form id="addSubForm" class="flex flex-wrap gap-2">
+                <input id="newSubNameIn" type="text" required placeholder="New subject or posting name..." class="flex-1 min-w-[160px] px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                <select id="newSubColIn" class="px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  ${COLOR_PALETTE.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+                </select>
+                <button type="submit" class="px-3.5 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">+ Add</button>
+              </form>
+              <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto scrollbar-thin">
+                ${state.subjects.map(s => `
+                  <div class="py-2 flex items-center gap-2">
+                    <input type="text" value="${escapeHtml(s.name)}" data-rename-sub="${s.id}" class="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium">
+                    <select data-recol-sub="${s.id}" class="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                      ${COLOR_PALETTE.map(c => `<option value="${c.id}" ${s.color === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}
+                    </select>
+                    <button data-del-sub="${s.id}" class="px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg" title="Remove">✕</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `, () => {
+            document.getElementById('addSubForm').addEventListener('submit', (e) => {
+              e.preventDefault();
+              const name = document.getElementById('newSubNameIn').value.trim();
+              if (!name) return;
+              if (state.subjects.some(x => x.name.toLowerCase() === name.toLowerCase())) {
+                showToast('Subject already exists', 'error'); return;
+              }
+              state.subjects.push({ id: 'sub_' + Date.now(), name, color: document.getElementById('newSubColIn').value });
+              saveState(); renderNav(); renderMainView(); renderBody();
+              showToast(`Added "${name}"`, 'success');
+            });
+            document.querySelectorAll('[data-rename-sub]').forEach(inp => inp.addEventListener('change', () => {
+              const sub = state.subjects.find(x => x.id === inp.dataset.renameSub);
+              const newName = inp.value.trim();
+              if (!sub || !newName || newName === sub.name) return;
+              const oldName = sub.name;
+              sub.name = newName;
+              // Propagate rename across modules
+              state.todos.forEach(t => { if (t.subject === oldName) t.subject = newName; });
+              state.attendance.forEach(a => { if (a.subject === oldName) a.subject = newName; });
+              state.schedule.forEach(sc => { if (sc.subject === oldName) sc.subject = newName; });
+              state.exams.forEach(ex => { if (ex.subject === oldName) ex.subject = newName; });
+              state.notes.forEach(n => { if (n.subject === oldName) n.subject = newName; });
+              state.syllabus.forEach(sy => { if (sy.subject === oldName) sy.subject = newName; });
+              saveState(); renderNav(); renderMainView();
+              showToast(`Renamed "${oldName}" → "${newName}"`, 'success');
+            }));
+            document.querySelectorAll('[data-recol-sub]').forEach(sel => sel.addEventListener('change', () => {
+              const sub = state.subjects.find(x => x.id === sel.dataset.recolSub);
+              if (sub) { sub.color = sel.value; saveState(); renderMainView(); }
+            }));
+            document.querySelectorAll('[data-del-sub]').forEach(btn => btn.addEventListener('click', () => {
+              if (state.subjects.length <= 1) { showToast('Keep at least one subject', 'error'); return; }
+              state.subjects = state.subjects.filter(x => x.id !== btn.dataset.delSub);
+              saveState(); renderNav(); renderMainView(); renderBody();
+            }));
+          });
+        };
+        renderBody();
+      }
+      document.getElementById('manageSubjectsBtnSidebar').addEventListener('click', openSubjectManager);
+      document.getElementById('manageSubjectsBtnMobile').addEventListener('click', () => {
+        document.getElementById('mobileDrawer').classList.add('hidden');
+        openSubjectManager();
+      });
+
+      // ================== OCR & SMART PDF/IMAGE ROUTINE IMPORTER ==================
+      async function extractTextFromFile(file, onProgress) {
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          const buf = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+          let fullText = '';
+          for (let p = 1; p <= pdf.numPages; p++) {
+            onProgress(`Reading PDF page ${p}/${pdf.numPages}...`, Math.round(((p - 1) / pdf.numPages) * 100));
+            const page = await pdf.getPage(p);
+            const tc = await page.getTextContent();
+            const pageText = tc.items.map(i => i.str).join(' ').trim();
+            if (pageText.length >= 40) {
+              fullText += pageText + '\n';
+            } else {
+              // Image-based / scanned PDF -> render to canvas and run Tesseract OCR
+              const vp = page.getViewport({ scale: 2.0 });
+              const c = document.createElement('canvas');
+              c.width = vp.width; c.height = vp.height;
+              await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+              if (window.Tesseract) {
+                const res = await Tesseract.recognize(c, 'eng', {
+                  logger: (m) => {
+                    if (m.status === 'recognizing text') {
+                      onProgress(`OCR scanning page ${p}/${pdf.numPages}: ${Math.round(m.progress * 100)}%`, Math.round(m.progress * 100));
+                    }
+                  }
+                });
+                fullText += (res.data.text || '') + '\n';
+              }
+            }
+          }
+          return fullText.trim();
+        } else {
+          // Image file (.png, .jpg, etc.)
+          if (!window.Tesseract) throw new Error('OCR engine not loaded');
+          const res = await Tesseract.recognize(file, 'eng', {
+            logger: (m) => {
+              if (m.status === 'recognizing text') {
+                onProgress(`OCR scanning image: ${Math.round(m.progress * 100)}%`, Math.round(m.progress * 100));
+              }
+            }
+          });
+          return (res.data.text || '').trim();
+        }
+      }
+
+      function matchSubjectFromText(txt) {
+        const low = txt.toLowerCase();
+        const aliases = [
+          { keys: ['psm', 'community', 'preventive', 'social med'], sub: 'Community Medicine' },
+          { keys: ['ophthal', 'eye'], sub: 'Ophthalmology' },
+          { keys: ['ent', 'otorhino', 'ear nose'], sub: 'ENT' },
+          { keys: ['fmt', 'forensic', 'toxicology'], sub: 'Forensic Medicine' },
+          { keys: ['gen med', 'medicine'], sub: 'General Medicine' },
+          { keys: ['gen surg', 'surgery'], sub: 'General Surgery' },
+          { keys: ['obg', 'obgyn', 'gynae', 'obstetric'], sub: 'OBGYN' },
+          { keys: ['paed', 'pediat'], sub: 'Pediatrics' },
+          { keys: ['posting', 'ward', 'clinic', 'opd'], sub: 'Clinical Postings' },
+          { keys: ['aetcom'], sub: 'AETCOM' }
+        ];
+        for (const s of state.subjects) {
+          if (low.includes(s.name.toLowerCase())) return s.name;
+        }
+        for (const a of aliases) {
+          if (a.keys.some(k => low.includes(k))) return a.sub;
+        }
+        return 'General';
+      }
+
+      function parseMessMenuText(text) {
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const shortMap = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+        const result = JSON.parse(JSON.stringify(state.messMenu));
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        let curDay = null;
+        for (const line of lines) {
+          const dayMatch = line.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b/i);
+          if (dayMatch) {
+            const k = dayMatch[1].toLowerCase().slice(0, 3);
+            curDay = shortMap[k] || days.find(d => d.toLowerCase() === dayMatch[1].toLowerCase());
+          }
+          if (!curDay) continue;
+          const bMatch = line.match(/(?:breakfast|bf)\s*[:\-–]\s*(.+?)(?=(?:lunch|snacks|tiffin|dinner|$))/i);
+          const lMatch = line.match(/(?:lunch)\s*[:\-–]\s*(.+?)(?=(?:snacks|tiffin|dinner|breakfast|$))/i);
+          const sMatch = line.match(/(?:snacks|tiffin|evening)\s*[:\-–]\s*(.+?)(?=(?:dinner|breakfast|lunch|$))/i);
+          const dMatch = line.match(/(?:dinner)\s*[:\-–]\s*(.+?)(?=(?:breakfast|lunch|snacks|$))/i);
+          if (bMatch) result[curDay].Breakfast = bMatch[1].trim();
+          if (lMatch) result[curDay].Lunch = lMatch[1].trim();
+          if (sMatch) result[curDay].Snacks = sMatch[1].trim();
+          if (dMatch) result[curDay].Dinner = dMatch[1].trim();
+          if (!bMatch && !lMatch && !sMatch && !dMatch && dayMatch) {
+            // Try tabular split (Day | Breakfast | Lunch | Snacks | Dinner)
+            const parts = line.replace(dayMatch[0], '').split(/[|\t;]+/).map(x => x.trim()).filter(Boolean);
+            if (parts.length >= 3) {
+              if (parts[0]) result[curDay].Breakfast = parts[0];
+              if (parts[1]) result[curDay].Lunch = parts[1];
+              if (parts[2] && parts.length === 3) result[curDay].Dinner = parts[2];
+              if (parts.length >= 4) { result[curDay].Snacks = parts[2]; result[curDay].Dinner = parts[3]; }
+            }
+          }
+        }
+        return result;
+      }
+
+      function parseScheduleText(text) {
+        const shortMap = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const slots = [];
+        let curDay = 'Monday';
+        for (const line of lines) {
+          const dayMatch = line.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|mon|tue|wed|thu|fri|sat)\b/i);
+          if (dayMatch) curDay = shortMap[dayMatch[1].toLowerCase().slice(0, 3)] || curDay;
+          const timeMatch = line.match(/(\d{1,2}[:.]\d{2}\s*(?:am|pm)?\s*[-–to]+\s*\d{1,2}[:.]\d{2}\s*(?:am|pm)?|\d{1,2}\s*[-–]\s*\d{1,2}\s*(?:am|pm)?)/i);
+          const sub = matchSubjectFromText(line);
+          if (sub !== 'General' || timeMatch) {
+            const isPrac = /prac|clinic|ward|posting|opd|lab|demo/i.test(line);
+            slots.push({
+              id: 'sc_' + Date.now() + '_' + slots.length,
+              day: curDay,
+              time: timeMatch ? timeMatch[1].trim() : '09:00 - 10:00',
+              subject: sub === 'General' ? state.subjects[0].name : sub,
+              type: isPrac ? 'Practical' : 'Theory'
+            });
+          }
+        }
+        return slots;
+      }
+
+      function parseTodosText(text) {
+        return text.split(/\r?\n/).map(l => l.replace(/^[\s\-*•\d.)\[\]x]+/i, '').trim()).filter(l => l.length > 3).map((line, i) => ({
+          id: 't_' + Date.now() + '_' + i,
+          text: line,
+          subject: matchSubjectFromText(line),
+          priority: /urgent|imp|high|exam/i.test(line) ? 'High' : 'Medium',
+          due: new Date().toISOString().slice(0, 10),
+          done: false
+        }));
+      }
+
+      function parseSyllabusText(text) {
+        return text.split(/\r?\n/).map(l => l.replace(/^[\s\-*•\d.)]+/, '').trim()).filter(l => l.length > 3).map((line, i) => ({
+          id: 'u_' + Date.now() + '_' + i,
+          title: line,
+          highYield: /high|imp|must|\*/i.test(line),
+          done: false
+        }));
+      }
+
+      function parseExamsText(text) {
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 4);
+        const exams = [];
+        for (const line of lines) {
+          const dm = line.match(/(\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
+          let dateStr = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+          if (dm) {
+            const raw = dm[1];
+            if (/^\d{4}-/.test(raw)) dateStr = raw;
+            else {
+              const pts = raw.split(/[\/\-]/);
+              if (pts.length === 3) {
+                const yr = pts[2].length === 2 ? '20' + pts[2] : pts[2];
+                dateStr = `${yr}-${pts[1].padStart(2, '0')}-${pts[0].padStart(2, '0')}`;
+              }
+            }
+          }
+          if (dm || /exam|ia|viva|test|prof|assessment/i.test(line)) {
+            exams.push({
+              id: 'e_' + Date.now() + '_' + exams.length,
+              title: line.replace(dm ? dm[0] : '', '').trim() || 'Scheduled Exam',
+              subject: matchSubjectFromText(line),
+              date: dateStr,
+              syllabusPct: 25,
+              notes: 'Imported from datesheet'
+            });
+          }
+        }
+        return exams;
+      }
+
+      function openSmartImportModal(targetSection) {
+        const titles = {
+          mess: 'Import Mess Menu from Image / PDF',
+          schedule: 'Import Class Timetable from Image / PDF',
+          todos: 'Import To-Do Routine from Image / PDF',
+          syllabus: 'Import Syllabus Topics from Image / PDF',
+          exams: 'Import Exam Datesheet from Image / PDF',
+          notes: 'Extract Text from Image / Scanned PDF into Note'
+        };
+        let extractedText = '';
+        openAppModal(`
+          <div class="space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <div>
+                <h3 class="font-bold text-base">${titles[targetSection] || 'Import from Image / PDF'}</h3>
+                <p class="text-xs text-slate-500">Supports text PDFs, image-based/scanned PDFs (via OCR), and PNG/JPG photos.</p>
+              </div>
+              <button id="cancelAppModal" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs">✕</button>
+            </div>
+
+            <label class="flex flex-col items-center justify-center p-5 border-2 border-dashed border-teal-400/60 rounded-2xl bg-teal-50/40 dark:bg-teal-950/20 cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-950/40 transition">
+              <span class="text-sm font-semibold text-teal-700 dark:text-teal-300">Click to Upload PDF or Image</span>
+              <span class="text-[11px] text-slate-500 mt-1">Image-based PDFs are automatically scanned with OCR</span>
+              <input id="smartImportFileIn" type="file" accept="application/pdf,image/*" class="hidden">
+            </label>
+
+            <div id="smartImportStatus" class="hidden space-y-1.5">
+              <div id="smartImportStatusTxt" class="text-xs font-medium text-teal-700 dark:text-teal-300">Processing...</div>
+              <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div id="smartImportBar" class="bg-teal-600 h-full transition-all" style="width:0%"></div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Extracted Text (editable before applying)</label>
+              <textarea id="smartImportTextArea" rows="6" class="w-full p-2.5 text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Upload a file or paste routine text here..."></textarea>
+            </div>
+
+            ${targetSection === 'syllabus' ? `
+              <div>
+                <label class="block text-xs font-semibold mb-1">Target Subject</label>
+                <select id="smartSylSubSel" class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  ${state.subjects.map(s => `<option value="${s.name}">${s.name}</option>`).join('')}
+                </select>
+              </div>
+            ` : ''}
+
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" id="smartImportCancelBtn" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+              <button type="button" id="smartImportApplyBtn" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">Parse & Apply Routine</button>
+            </div>
+          </div>
+        `, () => {
+          document.getElementById('smartImportCancelBtn').addEventListener('click', closeAppModal);
+          document.getElementById('smartImportFileIn').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const stDiv = document.getElementById('smartImportStatus');
+            const stTxt = document.getElementById('smartImportStatusTxt');
+            const stBar = document.getElementById('smartImportBar');
+            stDiv.classList.remove('hidden');
+            try {
+              extractedText = await extractTextFromFile(file, (msg, pct) => {
+                stTxt.textContent = msg;
+                stBar.style.width = pct + '%';
+              });
+              document.getElementById('smartImportTextArea').value = extractedText;
+              stTxt.textContent = 'Extraction complete! Review text below and click Parse & Apply.';
+              stBar.style.width = '100%';
+            } catch (err) {
+              stTxt.textContent = 'Error reading file: ' + err.message;
+            }
+          });
+
+          document.getElementById('smartImportApplyBtn').addEventListener('click', () => {
+            const raw = document.getElementById('smartImportTextArea').value.trim();
+            if (!raw) { showToast('Upload a PDF/image or paste text first', 'error'); return; }
+
+            if (targetSection === 'mess') {
+              state.messMenu = parseMessMenuText(raw);
+              saveState(); closeAppModal(); renderMainView();
+              showToast('Mess menu updated from PDF/Image!', 'success');
+            } else if (targetSection === 'schedule') {
+              const slots = parseScheduleText(raw);
+              if (slots.length) {
+                state.schedule = slots;
+                // Ensure every subject in schedule exists in attendance tracker
+                slots.forEach(sl => {
+                  if (!state.attendance.some(a => a.subject === sl.subject && a.type === sl.type)) {
+                    state.attendance.push({
+                      id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                      subject: sl.subject,
+                      type: sl.type,
+                      attended: 0,
+                      total: 0,
+                      target: sl.type === 'Theory' ? 75 : 80
+                    });
+                  }
+                });
+                saveState(); closeAppModal(); renderMainView();
+                showToast(`Imported ${slots.length} class slots into schedule!`, 'success');
+              } else {
+                showToast('Could not detect class slots — try formatting as "Monday 09:00-10:00 Ophthalmology"', 'error');
+              }
+            } else if (targetSection === 'todos') {
+              const items = parseTodosText(raw);
+              state.todos = [...items, ...state.todos];
+              saveState(); closeAppModal(); renderMainView();
+              showToast(`Added ${items.length} tasks to To-Do List!`, 'success');
+            } else if (targetSection === 'syllabus') {
+              const subName = document.getElementById('smartSylSubSel').value;
+              const units = parseSyllabusText(raw);
+              let sec = state.syllabus.find(s => s.subject === subName);
+              if (!sec) {
+                sec = { id: 'sy_' + Date.now(), subject: subName, units: [] };
+                state.syllabus.push(sec);
+              }
+              sec.units.push(...units);
+              saveState(); closeAppModal(); renderMainView();
+              showToast(`Added ${units.length} topics to ${subName}!`, 'success');
+            } else if (targetSection === 'exams') {
+              const exs = parseExamsText(raw);
+              state.exams.push(...exs);
+              saveState(); closeAppModal(); renderMainView();
+              showToast(`Imported ${exs.length} upcoming exams!`, 'success');
+            } else if (targetSection === 'notes') {
+              const newNote = {
+                id: 'n_' + Date.now(),
+                title: 'Scanned PDF / Image Note',
+                subject: state.subjects[0].name,
+                updatedAt: new Date().toISOString(),
+                content: '<p>' + escapeHtml(raw).replace(/\n+/g, '</p><p>') + '</p>'
+              };
+              state.notes.unshift(newNote);
+              activeNoteId = newNote.id;
+              pdfEditor.studioSubTab = 'notes';
+              saveState(); closeAppModal(); renderMainView();
+              showToast('Created Study Note from OCR text!', 'success');
+            }
+          });
+        });
+      }
+
+      // ================== ATTENDANCE + SCHEDULE + MONTHLY + DAILY CHECK-IN ==================
+      function calcAttendanceAdvice(att, tot, target) {
+        if (tot === 0) return { pct: 100, status: 'safe', msg: 'No classes logged yet' };
+        const pct = Math.round((att / tot) * 1000) / 10;
+        const t = target / 100;
+        if (pct >= target) {
+          const canMiss = Math.floor((att - t * tot) / t);
+          return {
+            pct,
+            status: pct - target < 3 ? 'warn' : 'safe',
+            msg: canMiss > 0 ? `Safe — can miss ${canMiss} class${canMiss > 1 ? 'es' : ''}` : 'Borderline — attend next class'
+          };
+        } else {
+          const need = Math.ceil((t * tot - att) / (1 - t));
+          return {
+            pct,
+            status: 'danger',
+            msg: `Short! Attend next ${need} class${need > 1 ? 'es' : ''} straight`
+          };
+        }
+      }
+
+      function getHolidaySet() {
+        return new Set((state.holidays || []).map(h => h.date));
+      }
+
+      function getTodayStr() {
+        return new Date().toISOString().slice(0, 10);
+      }
+
+      function getDayNameFromDateStr(dateStr) {
+        const d = new Date(dateStr + 'T12:00:00');
+        return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+      }
+
+      function logDailyClassStatus(dateStr, slot, status) {
+        if (!state.dailyAttendanceLog) state.dailyAttendanceLog = {};
+        if (!state.dailyAttendanceLog[dateStr]) state.dailyAttendanceLog[dateStr] = {};
+        const prev = state.dailyAttendanceLog[dateStr][slot.id];
+        if (prev === status) return;
+
+        // Find matching attendance record or create one
+        let attRec = state.attendance.find(a => a.subject === slot.subject && a.type === slot.type);
+        if (!attRec) {
+          attRec = {
+            id: 'a_' + Date.now(),
+            subject: slot.subject,
+            type: slot.type,
+            attended: 0,
+            total: 0,
+            target: slot.type === 'Theory' ? 75 : 80
+          };
+          state.attendance.push(attRec);
+        }
+
+        // Revert previous log impact
+        if (prev === 'present') { attRec.attended = Math.max(0, attRec.attended - 1); attRec.total = Math.max(0, attRec.total - 1); }
+        else if (prev === 'absent') { attRec.total = Math.max(0, attRec.total - 1); }
+
+        // Apply new status
+        if (status === 'present') { attRec.attended++; attRec.total++; }
+        else if (status === 'absent') { attRec.total++; }
+
+        state.dailyAttendanceLog[dateStr][slot.id] = status;
+        saveState();
+        renderMainView();
+        showToast(`${slot.subject}: marked ${status.toUpperCase()}`, 'success');
+      }
+
+      function renderDailyCheckinCard(dateStr) {
+        const holSet = getHolidaySet();
+        const dayName = getDayNameFromDateStr(dateStr);
+        const isHoliday = holSet.has(dateStr) || (state.excludeSundays && dayName === 'Sunday');
+        const todaySlots = (state.schedule || []).filter(s => s.day === dayName);
+        const dayLog = (state.dailyAttendanceLog && state.dailyAttendanceLog[dateStr]) || {};
+
+        return `
+          <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="font-bold text-sm sm:text-base">Daily Class Check-in (${dayName}, ${dateStr})</h3>
+                <p class="text-xs text-slate-500">Tap whether you attended each scheduled class today — holidays are excluded.</p>
+              </div>
+              <button data-mark-today-hol="${dateStr}" class="px-3 py-1.5 rounded-xl text-xs font-semibold ${isHoliday ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-50'}">
+                ${isHoliday ? '★ Holiday Active' : 'Mark Today Holiday'}
+              </button>
+            </div>
+            ${isHoliday ? `
+              <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 text-xs font-medium">
+                No classes counted today (Holiday / Sunday). Enjoy your break or catch up on Marrow!
+              </div>
+            ` : todaySlots.length === 0 ? `
+              <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-500">
+                No classes scheduled for ${dayName}. Upload your timetable PDF/image in Attendance to auto-fill.
+              </div>
+            ` : `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                ${todaySlots.map(sl => {
+                  const st = dayLog[sl.id];
+                  return `
+                    <div class="p-3 rounded-xl border ${st ? 'border-teal-300 dark:border-teal-800 bg-teal-50/30 dark:bg-teal-900/10' : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40'} flex items-center justify-between gap-2">
+                      <div class="min-w-0">
+                        <div class="text-xs font-bold truncate">${escapeHtml(sl.subject)}</div>
+                        <div class="text-[11px] text-slate-500">${escapeHtml(sl.time)} • ${sl.type}</div>
+                      </div>
+                      <div class="flex items-center gap-1 shrink-0">
+                        <button data-checkin="${dateStr}|${sl.id}|present" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${st === 'present' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50'}">Yes</button>
+                        <button data-checkin="${dateStr}|${sl.id}|absent" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${st === 'absent' ? 'bg-rose-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-rose-50'}">No</button>
+                        <button data-checkin="${dateStr}|${sl.id}|holiday" class="px-2 py-1 rounded-lg text-[11px] font-semibold ${st === 'holiday' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-amber-50'}" title="Class Cancelled / Holiday">Off</button>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        `;
+      }
+
+      function bindDailyCheckinHandlers(container) {
+        container.querySelectorAll('[data-checkin]').forEach(btn => btn.addEventListener('click', () => {
+          const [dateStr, slotId, status] = btn.dataset.checkin.split('|');
+          const slot = (state.schedule || []).find(s => s.id === slotId);
+          if (slot) logDailyClassStatus(dateStr, slot, status);
+        }));
+        container.querySelectorAll('[data-mark-today-hol]').forEach(btn => btn.addEventListener('click', () => {
+          const d = btn.dataset.markTodayHol;
+          const exists = state.holidays.some(h => h.date === d);
+          if (exists) state.holidays = state.holidays.filter(h => h.date !== d);
+          else state.holidays.push({ id: 'hol_' + Date.now(), date: d, name: 'Holiday' });
+          saveState(); renderMainView();
+        }));
+      }
+
+      function computeMonthlyAttendance(monthStr) {
+        const [yr, mo] = monthStr.split('-').map(Number);
+        const daysInMonth = new Date(yr, mo, 0).getDate();
+        const holSet = getHolidaySet();
+        const bySub = {};
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${yr}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const dayName = getDayNameFromDateStr(dateStr);
+          if ((state.excludeSundays && dayName === 'Sunday') || holSet.has(dateStr)) continue;
+          const daySlots = (state.schedule || []).filter(s => s.day === dayName);
+          const dayLog = (state.dailyAttendanceLog && state.dailyAttendanceLog[dateStr]) || {};
+          daySlots.forEach(sl => {
+            const key = `${sl.subject} (${sl.type})`;
+            if (!bySub[key]) bySub[key] = { subject: sl.subject, type: sl.type, scheduled: 0, present: 0, absent: 0, cancelled: 0 };
+            const st = dayLog[sl.id];
+            if (st === 'holiday') { bySub[key].cancelled++; return; }
+            bySub[key].scheduled++;
+            if (st === 'present') bySub[key].present++;
+            else if (st === 'absent') bySub[key].absent++;
+          });
+        }
+        return Object.values(bySub);
+      }
+
+      let selectedAttMonth = new Date().toISOString().slice(0, 7);
+
+      function daysUntil(dateStr) {
+        return Math.ceil((new Date(dateStr + 'T09:00:00') - new Date()) / 86400000);
+      }
+      function getTodayDayName() {
+        return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+      }
+      function getCurrentMealSlot() {
+        const h = new Date().getHours();
+        if (h < 10) return 'Breakfast';
+        if (h < 15) return 'Lunch';
+        if (h < 19) return 'Snacks';
+        return 'Dinner';
+      }
+
+      // ================== POMODORO ENGINE ==================
+      let pomoState = {
+        mode: 'focus',
+        durations: { focus: 25 * 60, deep: 50 * 60, short: 5 * 60, long: 15 * 60 },
+        remaining: 25 * 60,
+        running: false,
+        subject: 'Community Medicine',
+        intervalId: null,
+        noiseOn: false,
+        audioCtx: null,
+        noiseNode: null
+      };
+
+      function formatMMSS(sec) {
+        return `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
+      }
+
+      function playChime() {
+        try {
+          const ctx = pomoState.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          pomoState.audioCtx = ctx;
+          [523.25, 659.25, 783.99].forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.001, ctx.currentTime + idx * 0.14);
+            gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + idx * 0.14 + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.14 + 0.6);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + idx * 0.14); osc.stop(ctx.currentTime + idx * 0.14 + 0.65);
+          });
+        } catch (e) {}
+      }
+
+      function toggleBrownNoise() {
+        try {
+          if (pomoState.noiseOn) {
+            if (pomoState.noiseNode) { pomoState.noiseNode.disconnect(); pomoState.noiseNode = null; }
+            pomoState.noiseOn = false;
+          } else {
+            const ctx = pomoState.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+            pomoState.audioCtx = ctx;
+            if (ctx.state === 'suspended') ctx.resume();
+            const bufferSize = 2 * ctx.sampleRate;
+            const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            let lastOut = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+              const white = Math.random() * 2 - 1;
+              output[i] = (lastOut + (0.02 * white)) / 1.02;
+              lastOut = output[i]; output[i] *= 1.8;
+            }
+            const whiteNoise = ctx.createBufferSource();
+            whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true;
+            const gain = ctx.createGain(); gain.gain.value = 0.12;
+            whiteNoise.connect(gain); gain.connect(ctx.destination);
+            whiteNoise.start(0);
+            pomoState.noiseNode = gain; pomoState.noiseOn = true;
+          }
+          if (state.activeTab === 'pomodoro') renderMainView();
+        } catch (e) {}
+      }
+
+      function updateMiniPomo() {
+        const el = document.getElementById('miniPomoTime');
+        const dot = document.getElementById('miniPomoDot');
+        if (el) el.textContent = formatMMSS(pomoState.remaining);
+        if (dot) dot.className = `w-2 h-2 rounded-full ${pomoState.running ? 'bg-rose-500 animate-pulse' : 'bg-teal-500'}`;
+        if (state.activeTab === 'pomodoro') {
+          const disp = document.getElementById('pomoClockDisplay');
+          if (disp) disp.textContent = formatMMSS(pomoState.remaining);
+        }
+      }
+
+      function togglePomodoro() {
+        if (pomoState.running) {
+          clearInterval(pomoState.intervalId);
+          pomoState.running = false;
+        } else {
+          clearInterval(pomoState.intervalId);
+          pomoState.running = true;
+          pomoState.intervalId = setInterval(() => {
+            if (pomoState.remaining > 0) {
+              pomoState.remaining--;
+              updateMiniPomo();
+            } else {
+              clearInterval(pomoState.intervalId);
+              pomoState.running = false;
+              playChime();
+              if (pomoState.mode === 'focus' || pomoState.mode === 'deep') {
+                const mins = Math.round(pomoState.durations[pomoState.mode] / 60);
+                state.pomodoro.completedToday++;
+                state.pomodoro.totalMinutes += mins;
+                state.pomodoro.history.unshift({
+                  id: 'ps_' + Date.now(),
+                  subject: pomoState.subject,
+                  minutes: mins,
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+                saveState();
+                showToast(`Pomodoro complete! +${mins}m logged for ${pomoState.subject}`, 'success');
+              } else {
+                showToast('Break finished! Ready for next study block.', 'info');
+              }
+              pomoState.remaining = pomoState.durations[pomoState.mode];
+              if (state.activeTab === 'pomodoro') renderMainView();
+            }
+          }, 1000);
+        }
+        updateMiniPomo();
+        if (state.activeTab === 'pomodoro') renderMainView();
+      }
+
+      // ================== SAMPLE PDF GENERATOR (3rd Year MBBS) ==================
+      let samplePdfBytesCache = null;
+      async function getSamplePdfBytes() {
+        if (samplePdfBytesCache) return samplePdfBytesCache;
+        const { PDFDocument, StandardFonts, rgb } = PDFLib;
+        const pdfDoc = await PDFDocument.create();
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const fontReg = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+        const pagesContent = [
+          {
+            title: 'MBBS Phase III (3rd Year) — Ophthalmology & ENT High-Yield (Page 1)',
+            subtitle: 'Topic 1: Glaucoma, Cataract & Corneal Ulcer',
+            blocks: [
+              '1. Primary Open Angle Glaucoma (POAG) vs Angle Closure (PACG):',
+              '   - POAG: Painless, progressive peripheral vision loss; cupping of optic disc (CDR > 0.5).',
+              '   - PACG: Acute painful red eye, halos around lights, mid-dilated fixed pupil, stony hard globe.',
+              '   - First-line POAG drug: Prostaglandin analogues (Latanoprost) -> increases uveoscleral outflow.',
+              '',
+              '2. Cataract & Post-Op Complications:',
+              '   - Senile Cortical Cataract: Cuneiform (most common) vs Cupuliform (posterior subcapsular).',
+              '   - Nuclear Cataract: Index myopia ("Second sight" in elderly).',
+              '   - Most common late complication of ECCE/Phaco: Posterior Capsular Opacification (Nd:YAG).',
+              '',
+              '3. Corneal Ulcers:',
+              '   - Fungal Ulcer: Dry, leathery, feathery margins, satellite lesions (Aspergillus, Fusarium).',
+              '   - HSV Keratitis: Dendritic ulcer (fluorescein+), geographic ulcer with steroids.'
+            ]
+          },
+          {
+            title: 'MBBS Phase III (3rd Year) — Community Medicine (PSM) Core (Page 2)',
+            subtitle: 'Topic 2: Epidemiology, Screening & Biostatistics',
+            blocks: [
+              '1. Epidemiological Study Designs:',
+              '   - Cross-sectional: Prevalence study (Snapshot).',
+              '   - Case-Control: Retrospective, calculates Odds Ratio (OR); best for rare diseases.',
+              '   - Cohort: Prospective, calculates Relative Risk (RR) & Attributable Risk; best for incidence.',
+              '',
+              '2. Screening Test Validity:',
+              '   - Sensitivity = TP / (TP + FN) -> Ability to detect true positives (SnNOut).',
+              '   - Specificity = TN / (TN + FP) -> Ability to detect true negatives (SpPIn).',
+              '   - Positive Predictive Value (PPV) increases directly with disease prevalence.'
+            ]
+          }
+        ];
+
+        for (const pData of pagesContent) {
+          const page = pdfDoc.addPage([612, 792]);
+          page.drawRectangle({ x: 36, y: 720, width: 540, height: 42, color: rgb(0.05, 0.46, 0.43) });
+          page.drawText(pData.title, { x: 48, y: 742, size: 12.5, font: fontBold, color: rgb(1, 1, 1) });
+          page.drawText(pData.subtitle, { x: 48, y: 726, size: 9.5, font: fontReg, color: rgb(0.85, 0.98, 0.96) });
+          let y = 690;
+          for (const line of pData.blocks) {
+            const isHeading = /^\d\./.test(line);
+            page.drawText(line, {
+              x: 48, y, size: isHeading ? 11.5 : 10,
+              font: isHeading ? fontBold : fontReg,
+              color: isHeading ? rgb(0.06, 0.09, 0.16) : rgb(0.2, 0.25, 0.33)
+            });
+            y -= 20;
+          }
+          page.drawText('Use mouse drag or Keyboard Cursor Mode (K) + H to highlight, N for Sticky Notes, P to Draw', {
+            x: 48, y: 36, size: 8.5, font: fontReg, color: rgb(0.45, 0.5, 0.58)
+          });
+        }
+
+        samplePdfBytesCache = await pdfDoc.save();
+        return samplePdfBytesCache;
+      }
+
+      // ================== PDF EDITOR STATE ==================
+      let pdfEditor = {
+        doc: null, bytes: null, numPages: 0, scale: 1.25,
+        tool: 'select', color: '#fef08a', kbMode: false,
+        kbSpans: [], kbCursorIdx: 0, kbAnchorIdx: null, studioSubTab: 'pdf'
+      };
+
+      function getActivePdfRecord() {
+        return state.pdfs.find(p => p.id === state.activePdfId) || state.pdfs[0];
+      }
+      function ensurePageAnn(pdfRec, pageNum) {
+        if (!pdfRec.annotations) pdfRec.annotations = {};
+        if (!pdfRec.annotations[pageNum]) pdfRec.annotations[pageNum] = { highlights: [], strokes: [], notes: [], textBoxes: [] };
+        return pdfRec.annotations[pageNum];
+      }
+
+      // ================== RENDER VIEWS ==================
+      function renderMainView() {
+        const main = document.getElementById('mainView');
+        const tab = state.activeTab;
+        if (tab === 'dashboard') renderDashboard(main);
+        else if (tab === 'todos') renderTodos(main);
+        else if (tab === 'attendance') renderAttendance(main);
+        else if (tab === 'syllabus') renderSyllabus(main);
+        else if (tab === 'studio') renderStudio(main);
+        else if (tab === 'pomodoro') renderPomodoro(main);
+        else if (tab === 'exams') renderExams(main);
+        else if (tab === 'mess') renderMessMenu(main);
+      }
+
+      // 1. DASHBOARD
+      function renderDashboard(el) {
+        const pendingTodos = state.todos.filter(t => !t.done);
+        const lowAttendance = state.attendance.filter(a => a.total > 0 && (a.attended / a.total) * 100 < a.target);
+        const sortedExams = [...state.exams].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const nextExam = sortedExams[0];
+        const todayName = getTodayDayName();
+        const mealSlot = getCurrentMealSlot();
+        const todayMenu = state.messMenu[todayName] || {};
+        const todayStr = getTodayStr();
+
+        let totalTopics = 0, doneTopics = 0;
+        state.syllabus.forEach(s => s.units.forEach(u => { totalTopics++; if (u.done) doneTopics++; }));
+        const sylPct = totalTopics ? Math.round((doneTopics / totalTopics) * 100) : 0;
+
+        el.innerHTML = `
+          <div class="space-y-6">
+            ${renderDailyCheckinCard(todayStr)}
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400">Pending To-Dos</div>
+                <div class="text-2xl font-bold mt-1">${pendingTodos.length}</div>
+                <div class="text-xs text-teal-600 dark:text-teal-400 mt-1 cursor-pointer hover:underline" data-jump="todos">Open task list →</div>
+              </div>
+              <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400">Attendance Alerts</div>
+                <div class="text-2xl font-bold mt-1 ${lowAttendance.length ? 'text-rose-600' : 'text-emerald-600'}">${lowAttendance.length}</div>
+                <div class="text-xs text-slate-500 mt-1 cursor-pointer hover:underline" data-jump="attendance">${lowAttendance.length ? 'Below NMC 75%/80% limit' : 'All subjects safe'} →</div>
+              </div>
+              <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400">3rd Yr Syllabus</div>
+                <div class="text-2xl font-bold mt-1">${sylPct}%</div>
+                <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div class="bg-teal-600 h-full rounded-full" style="width:${sylPct}%"></div>
+                </div>
+              </div>
+              <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400">Focus Today</div>
+                <div class="text-2xl font-bold mt-1">${state.pomodoro.totalMinutes} min</div>
+                <div class="text-xs text-slate-500 mt-1">${state.pomodoro.completedToday} Pomodoro sessions</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="font-bold text-base">Today's Study Queue</h3>
+                  <button data-jump="todos" class="text-xs font-semibold text-teal-600 hover:underline">Manage All</button>
+                </div>
+                <div class="space-y-2.5">
+                  ${pendingTodos.slice(0, 5).map(t => `
+                    <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                      <label class="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                        <input type="checkbox" data-dash-todo="${t.id}" class="w-4 h-4 rounded accent-teal-600">
+                        <span class="text-sm font-medium truncate">${escapeHtml(t.text)}</span>
+                      </label>
+                      <span class="text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${getSubjectBadgeCls(t.subject)}">${escapeHtml(t.subject)}</span>
+                    </div>
+                  `).join('') || '<p class="text-sm text-slate-500 py-4 text-center">All caught up! Add a new study task.</p>'}
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="bg-gradient-to-br from-teal-700 to-teal-900 text-white rounded-2xl p-5 shadow-sm">
+                  <div class="text-[11px] uppercase tracking-wider font-semibold text-teal-200">Next Upcoming Exam</div>
+                  ${nextExam ? `
+                    <div class="font-bold text-lg mt-1">${escapeHtml(nextExam.title)}</div>
+                    <div class="text-xs text-teal-100 mt-0.5">${escapeHtml(nextExam.subject)} • ${nextExam.date}</div>
+                    <div class="mt-4 flex items-baseline gap-2">
+                      <span class="text-3xl font-extrabold">${Math.max(0, daysUntil(nextExam.date))}</span>
+                      <span class="text-xs text-teal-200">days remaining</span>
+                    </div>
+                  ` : '<p class="text-sm mt-2 text-teal-100">No upcoming exams scheduled.</p>'}
+                  <button data-jump="exams" class="mt-3 text-xs font-semibold underline text-teal-100">View Exam Countdown →</button>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-bold text-sm">Hostel Mess (${todayName})</h3>
+                    <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-semibold">${mealSlot}</span>
+                  </div>
+                  <p class="text-sm text-slate-700 dark:text-slate-300 font-medium">${escapeHtml(todayMenu[mealSlot] || 'Not set')}</p>
+                  <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                    <div><strong>Breakfast:</strong> ${escapeHtml(todayMenu.Breakfast || '-')}</div>
+                    <div><strong>Dinner:</strong> ${escapeHtml(todayMenu.Dinner || '-')}</div>
+                  </div>
+                  <button data-jump="mess" class="mt-3 text-xs font-semibold text-teal-600 hover:underline">Full Weekly Menu →</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        bindDailyCheckinHandlers(el);
+        el.querySelectorAll('[data-jump]').forEach(b => b.addEventListener('click', () => {
+          state.activeTab = b.dataset.jump;
+          saveState(true); renderNav(); renderMainView();
+        }));
+        el.querySelectorAll('[data-dash-todo]').forEach(cb => cb.addEventListener('change', () => {
+          const item = state.todos.find(t => t.id === cb.dataset.dashTodo);
+          if (item) { item.done = cb.checked; saveState(); renderMainView(); }
+        }));
+      }
+
+      // 2. TO-DO LIST (with Editable Subjects + Image/PDF Import)
+      let todoFilter = 'All';
+      function renderTodos(el) {
+        const subNames = getSubjectNames();
+        const filtered = state.todos.filter(t => todoFilter === 'All' || t.subject === todoFilter);
+        el.innerHTML = `
+          <div class="space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs text-slate-500">3rd Year MBBS Task Queue — add custom subjects or import a routine from an image/PDF.</p>
+              <div class="flex flex-wrap gap-2">
+                <button id="todoEditSubsBtn" class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50">✎ Edit Subjects</button>
+                <button id="todoImportPdfBtn" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Import Image/PDF Routine</button>
+              </div>
+            </div>
+
+            <form id="addTodoForm" class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap gap-2.5 items-center">
+              <input id="todoTextIn" type="text" required class="flex-1 min-w-[200px] px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" placeholder="Add study task (e.g., Revise Park Epidemiology)...">
+              <select id="todoSubIn" class="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                ${subNames.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+              </select>
+              <select id="todoPrioIn" class="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                <option value="High">High Priority</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Low">Low</option>
+              </select>
+              <input id="todoDueIn" type="date" class="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" value="${getTodayStr()}">
+              <button type="submit" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700">Add Task</button>
+            </form>
+
+            <div class="flex flex-wrap gap-1.5">
+              ${['All', ...subNames].map(s => `
+                <button data-tfilter="${escapeHtml(s)}" class="px-3 py-1.5 rounded-full text-xs font-semibold transition ${todoFilter === s ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'}">${escapeHtml(s)}</button>
+              `).join('')}
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 shadow-sm">
+              ${filtered.map(t => `
+                <div class="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <label class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                    <input type="checkbox" data-toggle-todo="${t.id}" ${t.done ? 'checked' : ''} class="w-4 h-4 rounded accent-teal-600">
+                    <div class="min-w-0">
+                      <div class="text-sm font-medium ${t.done ? 'line-through text-slate-400' : ''}">${escapeHtml(t.text)}</div>
+                      <div class="text-[11px] text-slate-400 mt-0.5">Due: ${t.due || 'No date'} • ${t.priority}</div>
+                    </div>
+                  </label>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium ${getSubjectBadgeCls(t.subject)}">${escapeHtml(t.subject)}</span>
+                    <button data-del-todo="${t.id}" class="p-1.5 text-slate-400 hover:text-rose-600 text-xs">✕</button>
+                  </div>
+                </div>
+              `).join('') || '<div class="p-8 text-center text-sm text-slate-500">No tasks in this filter.</div>'}
+            </div>
+          </div>
+        `;
+        document.getElementById('todoEditSubsBtn').addEventListener('click', openSubjectManager);
+        document.getElementById('todoImportPdfBtn').addEventListener('click', () => openSmartImportModal('todos'));
+        document.getElementById('addTodoForm').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const text = document.getElementById('todoTextIn').value.trim();
+          if (!text) return;
+          state.todos.unshift({
+            id: 't_' + Date.now(),
+            text,
+            subject: document.getElementById('todoSubIn').value,
+            priority: document.getElementById('todoPrioIn').value,
+            due: document.getElementById('todoDueIn').value,
+            done: false
+          });
+          saveState(); renderTodos(el); showToast('Task added', 'success');
+        });
+        el.querySelectorAll('[data-tfilter]').forEach(b => b.addEventListener('click', () => { todoFilter = b.dataset.tfilter; renderTodos(el); }));
+        el.querySelectorAll('[data-toggle-todo]').forEach(cb => cb.addEventListener('change', () => {
+          const item = state.todos.find(t => t.id === cb.dataset.toggleTodo);
+          if (item) { item.done = cb.checked; saveState(); renderTodos(el); }
+        }));
+        el.querySelectorAll('[data-del-todo]').forEach(b => b.addEventListener('click', () => {
+          state.todos = state.todos.filter(t => t.id !== b.dataset.delTodo);
+          saveState(); renderTodos(el);
+        }));
+      }
+
+      // 3. ATTENDANCE TRACKER + SCHEDULE + HOLIDAYS + MONTHLY VIEW
+      function renderAttendance(el) {
+        const monthlyRows = computeMonthlyAttendance(selectedAttMonth);
+        const todayStr = getTodayStr();
+        el.innerHTML = `
+          <div class="space-y-6">
+            <div class="bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/60 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="font-bold text-sm text-teal-900 dark:text-teal-200">NMC CBME Attendance & Class Schedule</h3>
+                <p class="text-xs text-teal-700 dark:text-teal-400">75% Theory & 80% Practical required. Upload your timetable PDF/Image to auto-track monthly classes & daily check-ins.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button id="importSchedulePdfBtn" class="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Upload Class Schedule PDF/Img</button>
+                <button id="addAttSubBtn" class="px-3.5 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">+ Add Subject</button>
+              </div>
+            </div>
+
+            ${renderDailyCheckinCard(todayStr)}
+
+            <!-- Monthly Calculator & Holidays -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 class="font-bold text-sm">Monthly Scheduled Attendance (Excluding Holidays)</h4>
+                    <p class="text-[11px] text-slate-500">Calculated from your weekly timetable minus Sundays & marked holidays.</p>
+                  </div>
+                  <input id="attMonthPick" type="month" value="${selectedAttMonth}" class="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-xs">
+                    <thead>
+                      <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-500">
+                        <th class="py-2">Subject</th>
+                        <th class="py-2">Scheduled</th>
+                        <th class="py-2">Present</th>
+                        <th class="py-2">Absent</th>
+                        <th class="py-2">Month %</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                      ${monthlyRows.map(r => {
+                        const logged = r.present + r.absent;
+                        const mpct = logged ? Math.round((r.present / logged) * 100) : '-';
+                        return `
+                          <tr>
+                            <td class="py-2 font-semibold">${escapeHtml(r.subject)} <span class="text-[10px] text-slate-400">(${r.type})</span></td>
+                            <td class="py-2">${r.scheduled}</td>
+                            <td class="py-2 text-emerald-600 font-semibold">${r.present}</td>
+                            <td class="py-2 text-rose-600 font-semibold">${r.absent}</td>
+                            <td class="py-2 font-bold">${mpct === '-' ? '—' : mpct + '%'}</td>
+                          </tr>
+                        `;
+                      }).join('') || '<tr><td colspan="5" class="py-4 text-center text-slate-400">No timetable slots configured yet.</td></tr>'}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Holidays Manager -->
+              <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-sm">Holidays (Excluded)</h4>
+                  <label class="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                    <input id="exclSunCb" type="checkbox" ${state.excludeSundays ? 'checked' : ''} class="accent-teal-600"> Exclude Sundays
+                  </label>
+                </div>
+                <form id="addHolForm" class="flex gap-1.5">
+                  <input id="holDateIn" type="date" required class="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                  <input id="holNameIn" type="text" required placeholder="Holiday name" class="flex-1 min-w-0 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                  <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">+</button>
+                </form>
+                <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-44 overflow-y-auto scrollbar-thin">
+                  ${(state.holidays || []).map(h => `
+                    <div class="py-1.5 flex items-center justify-between text-xs">
+                      <span><strong>${h.date}</strong> — ${escapeHtml(h.name)}</span>
+                      <button data-del-hol="${h.id}" class="text-slate-400 hover:text-rose-600">✕</button>
+                    </div>
+                  `).join('') || '<p class="text-xs text-slate-400 py-2">No holidays added.</p>'}
+                </div>
+              </div>
+            </div>
+
+            <!-- Cumulative Subject Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${state.attendance.map(a => {
+                const adv = calcAttendanceAdvice(a.attended, a.total, a.target);
+                const barColor = adv.status === 'danger' ? 'bg-rose-500' : adv.status === 'warn' ? 'bg-amber-500' : 'bg-emerald-500';
+                const badgeCls = adv.status === 'danger' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : adv.status === 'warn' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
+                return `
+                  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col justify-between gap-3">
+                    <div>
+                      <div class="flex items-start justify-between gap-2">
+                        <div>
+                          <div class="font-bold text-sm">${escapeHtml(a.subject)}</div>
+                          <div class="text-[11px] text-slate-500">${a.type} • Target ${a.target}%</div>
+                        </div>
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-full ${badgeCls}">${adv.pct}%</span>
+                      </div>
+                      <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full mt-3 overflow-hidden">
+                        <div class="${barColor} h-full rounded-full transition-all" style="width:${Math.min(100, adv.pct)}%"></div>
+                      </div>
+                      <div class="flex items-center justify-between text-xs text-slate-500 mt-2">
+                        <span>Attended: <strong>${a.attended}/${a.total}</strong></span>
+                        <button data-del-att="${a.id}" class="text-slate-400 hover:text-rose-600 text-[11px]">Remove</button>
+                      </div>
+                      <p class="text-xs mt-1.5 font-medium ${adv.status === 'danger' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-300'}">${adv.msg}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <button data-att-plus="${a.id}" class="py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-xs font-semibold">+ Present</button>
+                      <button data-att-miss="${a.id}" class="py-1.5 rounded-xl bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-xs font-semibold">+ Absent</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+        bindDailyCheckinHandlers(el);
+        document.getElementById('importSchedulePdfBtn').addEventListener('click', () => openSmartImportModal('schedule'));
+        document.getElementById('attMonthPick').addEventListener('change', (e) => { selectedAttMonth = e.target.value; renderAttendance(el); });
+        document.getElementById('exclSunCb').addEventListener('change', (e) => { state.excludeSundays = e.target.checked; saveState(); renderAttendance(el); });
+        document.getElementById('addHolForm').addEventListener('submit', (e) => {
+          e.preventDefault();
+          state.holidays.push({ id: 'hol_' + Date.now(), date: document.getElementById('holDateIn').value, name: document.getElementById('holNameIn').value.trim() });
+          saveState(); renderAttendance(el);
+        });
+        el.querySelectorAll('[data-del-hol]').forEach(b => b.addEventListener('click', () => {
+          state.holidays = state.holidays.filter(h => h.id !== b.dataset.delHol);
+          saveState(); renderAttendance(el);
+        }));
+        el.querySelectorAll('[data-att-plus]').forEach(b => b.addEventListener('click', () => {
+          const item = state.attendance.find(x => x.id === b.dataset.attPlus);
+          if (item) { item.attended++; item.total++; saveState(); renderAttendance(el); }
+        }));
+        el.querySelectorAll('[data-att-miss]').forEach(b => b.addEventListener('click', () => {
+          const item = state.attendance.find(x => x.id === b.dataset.attMiss);
+          if (item) { item.total++; saveState(); renderAttendance(el); }
+        }));
+        el.querySelectorAll('[data-del-att]').forEach(b => b.addEventListener('click', () => {
+          state.attendance = state.attendance.filter(x => x.id !== b.dataset.delAtt);
+          saveState(); renderAttendance(el);
+        }));
+        document.getElementById('addAttSubBtn').addEventListener('click', () => {
+          openAppModal(`
+            <h3 class="font-bold text-base mb-3">Add Attendance Tracker</h3>
+            <form id="newAttForm" class="space-y-3 text-sm">
+              <input id="naSub" type="text" required placeholder="Subject Name" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <select id="naType" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                <option value="Theory">Theory (75% min)</option>
+                <option value="Practical">Practical / Clinical (80% min)</option>
+              </select>
+              <div class="grid grid-cols-2 gap-2">
+                <input id="naAtt" type="number" min="0" value="0" placeholder="Attended" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                <input id="naTot" type="number" min="0" value="0" placeholder="Total" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              </div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                <button type="submit" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Add</button>
+              </div>
+            </form>
+          `, () => {
+            document.getElementById('newAttForm').addEventListener('submit', (e) => {
+              e.preventDefault();
+              const type = document.getElementById('naType').value;
+              const attended = parseInt(document.getElementById('naAtt').value, 10) || 0;
+              const total = Math.max(attended, parseInt(document.getElementById('naTot').value, 10) || 0);
+              state.attendance.push({
+                id: 'a_' + Date.now(), subject: document.getElementById('naSub').value.trim(),
+                type, attended, total, target: type === 'Theory' ? 75 : 80
+              });
+              saveState(); closeAppModal(); renderAttendance(el);
+            });
+          });
+        });
+      }
+
+      // 4. SYLLABUS
+      let sylSearch = '';
+      function renderSyllabus(el) {
+        el.innerHTML = `
+          <div class="space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <input id="sylSearchIn" type="search" value="${escapeHtml(sylSearch)}" placeholder="Search 3rd Year CBME topics..." class="flex-1 min-w-[200px] px-3.5 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+              <button id="sylImportPdfBtn" class="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Import Image/PDF</button>
+              <button id="addSylTopicBtn" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">+ Add Topic</button>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              ${state.syllabus.map(sec => {
+                const units = sec.units.filter(u => !sylSearch || u.title.toLowerCase().includes(sylSearch.toLowerCase()));
+                const doneCount = sec.units.filter(u => u.done).length;
+                const pct = sec.units.length ? Math.round((doneCount / sec.units.length) * 100) : 0;
+                return `
+                  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between">
+                      <div>
+                        <h3 class="font-bold text-base">${escapeHtml(sec.subject)}</h3>
+                        <p class="text-xs text-slate-500">${doneCount}/${sec.units.length} competencies completed</p>
+                      </div>
+                      <span class="text-sm font-bold text-teal-600">${pct}%</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div class="bg-teal-600 h-full rounded-full transition-all" style="width:${pct}%"></div>
+                    </div>
+                    <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-80 overflow-y-auto scrollbar-thin">
+                      ${units.map(u => `
+                        <label class="py-2.5 flex items-start gap-2.5 cursor-pointer">
+                          <input type="checkbox" data-syl-sub="${sec.id}" data-syl-unit="${u.id}" ${u.done ? 'checked' : ''} class="mt-0.5 w-4 h-4 rounded accent-teal-600">
+                          <span class="text-xs sm:text-sm flex-1 ${u.done ? 'line-through text-slate-400' : ''}">${escapeHtml(u.title)}</span>
+                          ${u.highYield ? '<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-semibold shrink-0">High-Yield</span>' : ''}
+                        </label>
+                      `).join('') || '<p class="text-xs text-slate-400 py-3">No matching topics.</p>'}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+        document.getElementById('sylImportPdfBtn').addEventListener('click', () => openSmartImportModal('syllabus'));
+        document.getElementById('sylSearchIn').addEventListener('input', (e) => { sylSearch = e.target.value; renderSyllabus(el); });
+        el.querySelectorAll('[data-syl-unit]').forEach(cb => cb.addEventListener('change', () => {
+          const sec = state.syllabus.find(s => s.id === cb.dataset.sylSub);
+          const u = sec && sec.units.find(x => x.id === cb.dataset.sylUnit);
+          if (u) { u.done = cb.checked; saveState(); renderSyllabus(el); }
+        }));
+        document.getElementById('addSylTopicBtn').addEventListener('click', () => {
+          openAppModal(`
+            <h3 class="font-bold text-base mb-3">Add Syllabus Topic</h3>
+            <form id="addSylForm" class="space-y-3 text-sm">
+              <select id="asSub" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                ${getSubjectNames().map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+              </select>
+              <input id="asTitle" type="text" required placeholder="Topic / Competency title" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <label class="flex items-center gap-2 text-xs"><input id="asHY" type="checkbox" checked class="accent-teal-600"> Mark as High-Yield</label>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                <button type="submit" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Add</button>
+              </div>
+            </form>
+          `, () => {
+            document.getElementById('addSylForm').addEventListener('submit', (e) => {
+              e.preventDefault();
+              const subName = document.getElementById('asSub').value;
+              let sec = state.syllabus.find(s => s.subject === subName);
+              if (!sec) { sec = { id: 'sy_' + Date.now(), subject: subName, units: [] }; state.syllabus.push(sec); }
+              sec.units.push({ id: 'u_' + Date.now(), title: document.getElementById('asTitle').value.trim(), highYield: document.getElementById('asHY').checked, done: false });
+              saveState(); closeAppModal(); renderSyllabus(el);
+            });
+          });
+        });
+      }
+
+      // 5. NOTES & PDF STUDIO
+      let activeNoteId = state.notes[0] ? state.notes[0].id : null;
+      function renderStudio(el) {
+        el.innerHTML = `
+          <div class="space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="inline-flex rounded-xl bg-slate-200/70 dark:bg-slate-800 p-1">
+                <button data-st="pdf" class="px-4 py-1.5 rounded-lg text-xs font-semibold transition ${pdfEditor.studioSubTab === 'pdf' ? 'bg-white dark:bg-slate-900 shadow-sm text-teal-700 dark:text-teal-300' : 'text-slate-600 dark:text-slate-400'}">PDF Reader & Editor</button>
+                <button data-st="notes" class="px-4 py-1.5 rounded-lg text-xs font-semibold transition ${pdfEditor.studioSubTab === 'notes' ? 'bg-white dark:bg-slate-900 shadow-sm text-teal-700 dark:text-teal-300' : 'text-slate-600 dark:text-slate-400'}">Study Notes (${state.notes.length})</button>
+              </div>
+              <button id="studioOcrBtn" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ OCR Image/PDF to Note</button>
+            </div>
+            <div id="studioWorkspace"></div>
+          </div>
+        `;
+        document.getElementById('studioOcrBtn').addEventListener('click', () => openSmartImportModal('notes'));
+        el.querySelectorAll('[data-st]').forEach(b => b.addEventListener('click', () => {
+          pdfEditor.studioSubTab = b.dataset.st; renderStudio(el);
+        }));
+        const ws = document.getElementById('studioWorkspace');
+        if (pdfEditor.studioSubTab === 'notes') renderNotesEditor(ws);
+        else renderPdfStudio(ws);
+      }
+
+      function renderNotesEditor(ws) {
+        const note = state.notes.find(n => n.id === activeNoteId) || state.notes[0];
+        if (note) activeNoteId = note.id;
+        const subNames = getSubjectNames();
+        ws.innerHTML = `
+          <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 space-y-2">
+              <button id="newNoteBtn" class="w-full py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">+ New Note</button>
+              <div class="space-y-1.5 max-h-[500px] overflow-y-auto scrollbar-thin">
+                ${state.notes.map(n => `
+                  <button data-sel-note="${n.id}" class="w-full text-left p-2.5 rounded-xl border transition ${n.id === activeNoteId ? 'border-teal-500 bg-teal-50/60 dark:bg-teal-900/20' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}">
+                    <div class="text-xs font-bold truncate">${escapeHtml(n.title || 'Untitled Note')}</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(n.subject)}</div>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="lg:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col gap-3">
+              ${note ? `
+                <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <input id="noteTitleIn" type="text" value="${escapeHtml(note.title)}" class="flex-1 min-w-[180px] font-bold text-base bg-transparent focus:outline-none">
+                  <select id="noteSubIn" class="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                    ${subNames.map(s => `<option value="${escapeHtml(s)}" ${note.subject === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+                  </select>
+                  <button id="delNoteBtn" class="px-2.5 py-1 rounded-lg text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-medium">Delete</button>
+                </div>
+                <div class="flex flex-wrap gap-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <button data-fmt="bold" class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs font-bold">B</button>
+                  <button data-fmt="italic" class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs italic">I</button>
+                  <button data-fmt="hiliteColor" data-val="#fef08a" class="px-2.5 py-1 rounded bg-yellow-200 text-slate-900 text-xs font-semibold">Highlight</button>
+                  <button data-fmt="insertUnorderedList" class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">• List</button>
+                  <button id="insertPearlBtn" class="px-2.5 py-1 rounded bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 text-xs font-semibold">+ Clinical Pearl</button>
+                </div>
+                <div id="noteBodyEd" contenteditable="true" class="min-h-[340px] p-2 text-sm leading-relaxed focus:outline-none prose dark:prose-invert max-w-none">${note.content}</div>
+              ` : '<p class="text-sm text-slate-500 p-8 text-center">Create a note to begin.</p>'}
+            </div>
+          </div>
+        `;
+        document.getElementById('newNoteBtn').addEventListener('click', () => {
+          const n = { id: 'n_' + Date.now(), title: 'New Study Note', subject: state.subjects[0].name, updatedAt: new Date().toISOString(), content: '<p>Start writing your MBBS notes here...</p>' };
+          state.notes.unshift(n); activeNoteId = n.id; saveState(); renderNotesEditor(ws);
+        });
+        ws.querySelectorAll('[data-sel-note]').forEach(b => b.addEventListener('click', () => { activeNoteId = b.dataset.selNote; renderNotesEditor(ws); }));
+        if (note) {
+          document.getElementById('noteTitleIn').addEventListener('input', (e) => { note.title = e.target.value; saveState(); });
+          document.getElementById('noteSubIn').addEventListener('change', (e) => { note.subject = e.target.value; saveState(); renderNotesEditor(ws); });
+          document.getElementById('noteBodyEd').addEventListener('input', (e) => { note.content = e.target.innerHTML; note.updatedAt = new Date().toISOString(); saveState(); });
+          document.getElementById('delNoteBtn').addEventListener('click', () => {
+            state.notes = state.notes.filter(n => n.id !== note.id);
+            activeNoteId = state.notes[0] ? state.notes[0].id : null;
+            saveState(); renderNotesEditor(ws);
+          });
+          ws.querySelectorAll('[data-fmt]').forEach(b => b.addEventListener('click', () => {
+            document.execCommand(b.dataset.fmt, false, b.dataset.val || null);
+            note.content = document.getElementById('noteBodyEd').innerHTML; saveState();
+          }));
+          document.getElementById('insertPearlBtn').addEventListener('click', () => {
+            document.execCommand('insertHTML', false, '<blockquote><strong>Clinical Pearl:</strong> Key exam takeaway...</blockquote>');
+            note.content = document.getElementById('noteBodyEd').innerHTML; saveState();
+          });
+        }
+      }
+
+      async function renderPdfStudio(ws) {
+        const activePdf = getActivePdfRecord();
+        ws.innerHTML = `
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div class="lg:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 space-y-3">
+              <label class="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 cursor-pointer">
+                <span>+ Upload PDF</span>
+                <input id="uploadPdfInput" type="file" accept="application/pdf" class="hidden">
+              </label>
+              <div class="space-y-1.5 max-h-60 lg:max-h-[540px] overflow-y-auto scrollbar-thin">
+                ${state.pdfs.map(p => `
+                  <div class="flex items-center justify-between gap-1 p-2 rounded-xl border ${p.id === activePdf.id ? 'border-teal-500 bg-teal-50/60 dark:bg-teal-900/20' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}">
+                    <button data-open-pdf="${p.id}" class="flex-1 text-left min-w-0">
+                      <div class="text-xs font-semibold truncate">${escapeHtml(p.name)}</div>
+                      <div class="text-[10px] text-slate-500">${escapeHtml(p.subject)} ${p.isSample ? '• Built-in' : p.isEdited ? '• Edited & Stored' : '• Stored in App'}</div>
+                    </button>
+                    ${!p.isSample ? `<button data-del-pdf="${p.id}" class="p-1 text-slate-400 hover:text-rose-600 text-xs">✕</button>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+              <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                <div class="font-bold text-slate-800 dark:text-slate-100">Keyboard & Mouse Guide</div>
+                <div>• <strong>Mouse:</strong> Drag text → press <kbd class="px-1 bg-white dark:bg-slate-700 rounded">H</kbd> or click Highlight</div>
+                <div>• <strong>Keyboard-Only:</strong> Press <kbd class="px-1 bg-white dark:bg-slate-700 rounded">K</kbd> for cursor, <kbd class="px-1 bg-white dark:bg-slate-700 rounded">Shift+Arrows</kbd> to select, <kbd class="px-1 bg-white dark:bg-slate-700 rounded">H</kbd>/<kbd class="px-1 bg-white dark:bg-slate-700 rounded">U</kbd>/<kbd class="px-1 bg-white dark:bg-slate-700 rounded">S</kbd></div>
+                <div>• <strong>Colors:</strong> Press <kbd class="px-1 bg-white dark:bg-slate-700 rounded">1</kbd>-<kbd class="px-1 bg-white dark:bg-slate-700 rounded">4</kbd></div>
+              </div>
+            </div>
+
+            <div class="lg:col-span-9 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
+              <div class="p-2.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-1.5 bg-slate-50 dark:bg-slate-800/50">
+                <button data-ptool="select" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold ${pdfEditor.tool === 'select' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}">Select</button>
+                <button id="pdfHighlightSelBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-yellow-200 text-slate-900 hover:bg-yellow-300">Highlight (H)</button>
+                <button id="pdfUnderlineSelBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 underline">U</button>
+                <button id="pdfStrikeSelBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 line-through">S</button>
+                <button id="pdfKbModeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold ${pdfEditor.kbMode ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}">KB Cursor (K)</button>
+                <button data-ptool="pen" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold ${pdfEditor.tool === 'pen' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}">Pen (P)</button>
+                <button data-ptool="note" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold ${pdfEditor.tool === 'note' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}">Note (N)</button>
+                <button data-ptool="text" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold ${pdfEditor.tool === 'text' ? 'bg-teal-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}">Text (T)</button>
+                <button data-ptool="eraser" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold ${pdfEditor.tool === 'eraser' ? 'bg-rose-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}">Eraser (E)</button>
+
+                <div class="flex items-center gap-1 px-1.5">
+                  ${['#fef08a', '#bbf7d0', '#bae6fd', '#fbcfe8'].map((col, idx) => `
+                    <button data-pcol="${col}" class="w-5 h-5 rounded-full border-2 ${pdfEditor.color === col ? 'border-slate-900 dark:border-white scale-110' : 'border-transparent'}" style="background:${col}" title="Color ${idx + 1}"></button>
+                  `).join('')}
+                </div>
+
+                <div class="ml-auto flex items-center gap-1.5">
+                  <button id="pdfZoomOut" class="px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">−</button>
+                  <span id="pdfZoomLabel" class="text-xs font-mono w-10 text-center">${Math.round(pdfEditor.scale * 100)}%</span>
+                  <button id="pdfZoomIn" class="px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold">+</button>
+                  <button id="pdfSaveInAppBtn" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700" title="Save edited PDF inside app library">Save to App</button>
+                  <button id="pdfExportBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Export PDF</button>
+                </div>
+              </div>
+
+              <div id="pdfViewport" class="flex-1 bg-slate-200/70 dark:bg-slate-950 p-4 overflow-y-auto max-h-[640px] scrollbar-thin">
+                <div class="text-center py-12 text-sm text-slate-500">Loading PDF...</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        document.getElementById('uploadPdfInput').addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const buf = await file.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          const id = 'pdf_' + Date.now();
+          await savePdfBytesToIDB(id, bytes);
+          state.pdfs.unshift({ id, name: file.name, subject: state.subjects[0].name, isSample: false, isEdited: false, annotations: {}, bookmarks: [] });
+          state.activePdfId = id; saveState(); renderPdfStudio(ws);
+          showToast(`Stored ${file.name} in app`, 'success');
+        });
+
+        ws.querySelectorAll('[data-open-pdf]').forEach(b => b.addEventListener('click', () => {
+          state.activePdfId = b.dataset.openPdf; saveState(); renderPdfStudio(ws);
+        }));
+        ws.querySelectorAll('[data-del-pdf]').forEach(b => b.addEventListener('click', async () => {
+          const delId = b.dataset.delPdf;
+          await deletePdfBytesFromIDB(delId);
+          state.pdfs = state.pdfs.filter(p => p.id !== delId);
+          state.activePdfId = state.pdfs[0].id; saveState(); renderPdfStudio(ws);
+        }));
+        ws.querySelectorAll('[data-ptool]').forEach(b => b.addEventListener('click', () => { pdfEditor.tool = b.dataset.ptool; renderPdfStudio(ws); }));
+        ws.querySelectorAll('[data-pcol]').forEach(b => b.addEventListener('click', () => { pdfEditor.color = b.dataset.pcol; renderPdfStudio(ws); }));
+        document.getElementById('pdfKbModeBtn').addEventListener('click', () => {
+          pdfEditor.kbMode = !pdfEditor.kbMode; pdfEditor.kbAnchorIdx = null; renderPdfStudio(ws);
+          showToast(pdfEditor.kbMode ? 'Keyboard Cursor ON: Arrows move, Shift+Arrows select, H highlights' : 'Keyboard Cursor OFF');
+        });
+        document.getElementById('pdfHighlightSelBtn').addEventListener('click', () => applyTextAnnotation('highlight'));
+        document.getElementById('pdfUnderlineSelBtn').addEventListener('click', () => applyTextAnnotation('underline'));
+        document.getElementById('pdfStrikeSelBtn').addEventListener('click', () => applyTextAnnotation('strike'));
+        document.getElementById('pdfZoomIn').addEventListener('click', () => { pdfEditor.scale = Math.min(2.2, +(pdfEditor.scale + 0.15).toFixed(2)); renderPdfPages(); });
+        document.getElementById('pdfZoomOut').addEventListener('click', () => { pdfEditor.scale = Math.max(0.7, +(pdfEditor.scale - 0.15).toFixed(2)); renderPdfPages(); });
+        document.getElementById('pdfSaveInAppBtn').addEventListener('click', () => saveEditedPdfInApp(ws));
+        document.getElementById('pdfExportBtn').addEventListener('click', exportAnnotatedPdf);
+        await loadAndRenderActivePdf();
+      }
+
+      async function loadAndRenderActivePdf() {
+        const rec = getActivePdfRecord();
+        let bytes;
+        if (rec.isSample) bytes = await getSamplePdfBytes();
+        else {
+          bytes = await loadPdfBytesFromIDB(rec.id);
+          if (!bytes && rec.dataUrl) {
+            const base64 = rec.dataUrl.split(',')[1];
+            const bin = atob(base64);
+            bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          }
+          if (!bytes) bytes = await getSamplePdfBytes();
+        }
+
+        pdfEditor.bytes = bytes;
+        pdfEditor.doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+        pdfEditor.numPages = pdfEditor.doc.numPages;
+        await renderPdfPages();
+      }
+
+      async function renderPdfPages() {
+        const vp = document.getElementById('pdfViewport');
+        if (!vp || !pdfEditor.doc) return;
+        const zLbl = document.getElementById('pdfZoomLabel');
+        if (zLbl) zLbl.textContent = Math.round(pdfEditor.scale * 100) + '%';
+        vp.innerHTML = '';
+        pdfEditor.kbSpans = [];
+        const rec = getActivePdfRecord();
+
+        for (let pageNum = 1; pageNum <= pdfEditor.numPages; pageNum++) {
+          const page = await pdfEditor.doc.getPage(pageNum);
+          const viewport = page.getViewport({ scale: pdfEditor.scale });
+          const wrap = document.createElement('div');
+          wrap.className = 'pdf-page-wrap';
+          wrap.style.width = viewport.width + 'px';
+          wrap.style.height = viewport.height + 'px';
+          wrap.dataset.page = pageNum;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+          const textLayerDiv = document.createElement('div');
+          textLayerDiv.className = 'pdf-text-layer';
+          textLayerDiv.style.width = viewport.width + 'px';
+          textLayerDiv.style.height = viewport.height + 'px';
+
+          const textContent = await page.getTextContent();
+          textContent.items.forEach((item) => {
+            if (!item.str) return;
+            const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+            const span = document.createElement('span');
+            const fontSize = Math.hypot(tx[2], tx[3]);
+            span.textContent = item.str;
+            span.style.left = tx[4] + 'px';
+            span.style.top = (tx[5] - fontSize) + 'px';
+            span.style.fontSize = fontSize + 'px';
+            span.style.width = (item.width * pdfEditor.scale) + 'px';
+            span.style.height = (fontSize * 1.15) + 'px';
+            span.dataset.page = pageNum;
+            const globalIdx = pdfEditor.kbSpans.length;
+            span.dataset.kbIdx = globalIdx;
+            span.addEventListener('click', () => {
+              if (pdfEditor.kbMode) { pdfEditor.kbCursorIdx = globalIdx; pdfEditor.kbAnchorIdx = null; updateKbCursorVisuals(); }
+            });
+            pdfEditor.kbSpans.push({ page: pageNum, idx: globalIdx, el: span });
+            textLayerDiv.appendChild(span);
+          });
+
+          const annLayer = document.createElement('div'); annLayer.className = 'pdf-ann-layer';
+          const drawCanvas = document.createElement('canvas');
+          drawCanvas.className = 'pdf-draw-layer' + (['pen', 'note', 'text', 'eraser'].includes(pdfEditor.tool) ? ' active-draw' : '');
+          drawCanvas.width = viewport.width; drawCanvas.height = viewport.height;
+
+          wrap.appendChild(canvas); wrap.appendChild(annLayer); wrap.appendChild(textLayerDiv); wrap.appendChild(drawCanvas);
+          vp.appendChild(wrap);
+          renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, viewport.width, viewport.height);
+          bindDrawAndClickLayer(rec, pageNum, drawCanvas, annLayer, viewport.width, viewport.height);
+        }
+        if (pdfEditor.kbMode) updateKbCursorVisuals();
+      }
+
+      function renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h) {
+        const ann = ensurePageAnn(rec, pageNum);
+        annLayer.innerHTML = '';
+        ann.highlights.forEach(hl => {
+          hl.rects.forEach(r => {
+            const d = document.createElement('div');
+            d.className = 'pdf-ann-item';
+            d.style.left = (r.x * w) + 'px'; d.style.top = (r.y * h) + 'px';
+            d.style.width = (r.w * w) + 'px'; d.style.height = (r.h * h) + 'px';
+            if (hl.kind === 'underline') d.style.borderBottom = `2.5px solid ${hl.color === '#fef08a' ? '#eab308' : hl.color}`;
+            else if (hl.kind === 'strike') { d.style.borderTop = '2px solid #ef4444'; d.style.top = ((r.y + r.h * 0.5) * h) + 'px'; d.style.height = '2px'; }
+            else { d.style.background = hl.color; d.style.opacity = '0.45'; d.style.borderRadius = '2px'; }
+            if (pdfEditor.tool === 'eraser') {
+              d.style.cursor = 'pointer';
+              d.addEventListener('click', (e) => {
+                e.stopPropagation();
+                ann.highlights = ann.highlights.filter(x => x.id !== hl.id);
+                saveState(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h);
+              });
+            }
+            annLayer.appendChild(d);
+          });
+        });
+
+        ann.notes.forEach(sn => {
+          const pin = document.createElement('button');
+          pin.className = 'pdf-ann-item w-7 h-7 rounded-full bg-amber-400 text-amber-950 shadow-md flex items-center justify-center text-xs font-bold border-2 border-white hover:scale-110 transition';
+          pin.style.left = (sn.x * w - 14) + 'px'; pin.style.top = (sn.y * h - 14) + 'px';
+          pin.textContent = '✎'; pin.title = sn.text;
+          pin.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (pdfEditor.tool === 'eraser') {
+              ann.notes = ann.notes.filter(x => x.id !== sn.id);
+              saveState(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h); return;
+            }
+            openAppModal(`
+              <h3 class="font-bold text-base mb-2">Sticky Note (Page ${pageNum})</h3>
+              <textarea id="snEditArea" rows="4" class="w-full p-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">${escapeHtml(sn.text)}</textarea>
+              <div class="flex justify-between mt-3">
+                <button id="snDeleteBtn" class="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-semibold">Delete Note</button>
+                <div class="flex gap-2">
+                  <button id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                  <button id="snSaveBtn" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Save</button>
+                </div>
+              </div>
+            `, () => {
+              document.getElementById('snSaveBtn').addEventListener('click', () => {
+                sn.text = document.getElementById('snEditArea').value;
+                saveState(); closeAppModal(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h);
+              });
+              document.getElementById('snDeleteBtn').addEventListener('click', () => {
+                ann.notes = ann.notes.filter(x => x.id !== sn.id);
+                saveState(); closeAppModal(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h);
+              });
+            });
+          });
+          annLayer.appendChild(pin);
+        });
+
+        ann.textBoxes.forEach(tb => {
+          const box = document.createElement('div');
+          box.className = 'pdf-ann-item px-2 py-1 rounded bg-white/90 border border-teal-500 text-slate-900 text-xs font-semibold shadow-sm cursor-pointer';
+          box.style.left = (tb.x * w) + 'px'; box.style.top = (tb.y * h) + 'px'; box.textContent = tb.text;
+          box.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (pdfEditor.tool === 'eraser') { ann.textBoxes = ann.textBoxes.filter(x => x.id !== tb.id); saveState(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h); }
+          });
+          annLayer.appendChild(box);
+        });
+
+        const dctx = drawCanvas.getContext('2d');
+        dctx.clearRect(0, 0, w, h);
+        ann.strokes.forEach(st => {
+          if (st.pts.length < 2) return;
+          dctx.beginPath(); dctx.strokeStyle = st.color; dctx.lineWidth = 3; dctx.lineCap = 'round'; dctx.lineJoin = 'round';
+          dctx.moveTo(st.pts[0].x * w, st.pts[0].y * h);
+          for (let i = 1; i < st.pts.length; i++) dctx.lineTo(st.pts[i].x * w, st.pts[i].y * h);
+          dctx.stroke();
+        });
+      }
+
+      function bindDrawAndClickLayer(rec, pageNum, drawCanvas, annLayer, w, h) {
+        let drawing = false, currentStroke = null;
+        drawCanvas.addEventListener('mousedown', (e) => {
+          const rect = drawCanvas.getBoundingClientRect();
+          const x = (e.clientX - rect.left) / w, y = (e.clientY - rect.top) / h;
+          const ann = ensurePageAnn(rec, pageNum);
+          if (pdfEditor.tool === 'pen') {
+            drawing = true;
+            currentStroke = { id: 'st_' + Date.now(), color: pdfEditor.color === '#fef08a' ? '#ef4444' : pdfEditor.color, pts: [{ x, y }] };
+          } else if (pdfEditor.tool === 'note') {
+            openAppModal(`
+              <h3 class="font-bold text-base mb-2">Add Sticky Note</h3>
+              <textarea id="newSnText" rows="3" placeholder="Write margin note..." class="w-full p-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"></textarea>
+              <div class="flex justify-end gap-2 mt-3">
+                <button id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                <button id="saveNewSnBtn" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Add Note</button>
+              </div>
+            `, () => {
+              document.getElementById('saveNewSnBtn').addEventListener('click', () => {
+                const txt = document.getElementById('newSnText').value.trim();
+                if (txt) { ann.notes.push({ id: 'sn_' + Date.now(), x, y, text: txt }); saveState(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h); }
+                closeAppModal();
+              });
+            });
+          } else if (pdfEditor.tool === 'text') {
+            openAppModal(`
+              <h3 class="font-bold text-base mb-2">Insert Text Annotation</h3>
+              <input id="newTbText" type="text" placeholder="Type text to place on PDF..." class="w-full p-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div class="flex justify-end gap-2 mt-3">
+                <button id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                <button id="saveNewTbBtn" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Insert</button>
+              </div>
+            `, () => {
+              document.getElementById('saveNewTbBtn').addEventListener('click', () => {
+                const txt = document.getElementById('newTbText').value.trim();
+                if (txt) { ann.textBoxes.push({ id: 'tb_' + Date.now(), x, y, text: txt }); saveState(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h); }
+                closeAppModal();
+              });
+            });
+          } else if (pdfEditor.tool === 'eraser') {
+            ann.strokes = ann.strokes.filter(st => !st.pts.some(pt => Math.hypot(pt.x - x, pt.y - y) < 0.03));
+            saveState(); renderPageAnnotations(rec, pageNum, annLayer, drawCanvas, w, h);
+          }
+        });
+        drawCanvas.addEventListener('mousemove', (e) => {
+          if (!drawing || !currentStroke) return;
+          const rect = drawCanvas.getBoundingClientRect();
+          currentStroke.pts.push({ x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h });
+          const dctx = drawCanvas.getContext('2d'), pts = currentStroke.pts;
+          if (pts.length >= 2) {
+            dctx.beginPath(); dctx.strokeStyle = currentStroke.color; dctx.lineWidth = 3; dctx.lineCap = 'round';
+            dctx.moveTo(pts[pts.length - 2].x * w, pts[pts.length - 2].y * h);
+            dctx.lineTo(pts[pts.length - 1].x * w, pts[pts.length - 1].y * h); dctx.stroke();
+          }
+        });
+        window.addEventListener('mouseup', () => {
+          if (drawing && currentStroke) {
+            drawing = false; ensurePageAnn(rec, pageNum).strokes.push(currentStroke); currentStroke = null; saveState();
+          }
+        });
+      }
+
+      function updateKbCursorVisuals() {
+        pdfEditor.kbSpans.forEach(s => s.el.classList.remove('kb-cursor', 'kb-selected'));
+        const cur = pdfEditor.kbSpans[pdfEditor.kbCursorIdx];
+        if (cur) { cur.el.classList.add('kb-cursor'); cur.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+        if (pdfEditor.kbAnchorIdx !== null) {
+          const min = Math.min(pdfEditor.kbAnchorIdx, pdfEditor.kbCursorIdx);
+          const max = Math.max(pdfEditor.kbAnchorIdx, pdfEditor.kbCursorIdx);
+          for (let i = min; i <= max; i++) if (pdfEditor.kbSpans[i]) pdfEditor.kbSpans[i].el.classList.add('kb-selected');
+        }
+      }
+
+      function applyTextAnnotation(kind) {
+        const rec = getActivePdfRecord();
+        const groupedByPage = {};
+        if (pdfEditor.kbMode && pdfEditor.kbSpans.length > 0) {
+          const min = pdfEditor.kbAnchorIdx !== null ? Math.min(pdfEditor.kbAnchorIdx, pdfEditor.kbCursorIdx) : pdfEditor.kbCursorIdx;
+          const max = pdfEditor.kbAnchorIdx !== null ? Math.max(pdfEditor.kbAnchorIdx, pdfEditor.kbCursorIdx) : pdfEditor.kbCursorIdx;
+          for (let i = min; i <= max; i++) {
+            const item = pdfEditor.kbSpans[i]; if (!item) continue;
+            const wrap = item.el.closest('.pdf-page-wrap'); if (!wrap) continue;
+            const wr = wrap.getBoundingClientRect(), sr = item.el.getBoundingClientRect();
+            if (!groupedByPage[item.page]) groupedByPage[item.page] = [];
+            groupedByPage[item.page].push({ x: (sr.left - wr.left) / wr.width, y: (sr.top - wr.top) / wr.height, w: sr.width / wr.width, h: sr.height / wr.height });
+          }
+        } else {
+          const sel = window.getSelection();
+          if (!sel || sel.isCollapsed) { showToast('Select text with mouse or turn on KB Cursor (K) first', 'info'); return; }
+          const rects = Array.from(sel.getRangeAt(0).getClientRects());
+          rects.forEach(sr => {
+            if (sr.width < 2 || sr.height < 2) return;
+            document.querySelectorAll('.pdf-page-wrap').forEach(wrap => {
+              const wr = wrap.getBoundingClientRect();
+              if (sr.top >= wr.top && sr.bottom <= wr.bottom && sr.left >= wr.left && sr.right <= wr.right) {
+                const pg = parseInt(wrap.dataset.page, 10);
+                if (!groupedByPage[pg]) groupedByPage[pg] = [];
+                groupedByPage[pg].push({ x: (sr.left - wr.left) / wr.width, y: (sr.top - wr.top) / wr.height, w: sr.width / wr.width, h: sr.height / wr.height });
+              }
+            });
+          });
+          sel.removeAllRanges();
+        }
+        const pages = Object.keys(groupedByPage);
+        if (pages.length === 0) { showToast('No PDF text selected', 'info'); return; }
+        pages.forEach(pgStr => {
+          const pg = parseInt(pgStr, 10);
+          ensurePageAnn(rec, pg).highlights.push({ id: 'hl_' + Date.now() + '_' + pg, color: pdfEditor.color, kind, rects: groupedByPage[pg] });
+          const wrap = document.querySelector(`.pdf-page-wrap[data-page="${pg}"]`);
+          if (wrap) renderPageAnnotations(rec, pg, wrap.querySelector('.pdf-ann-layer'), wrap.querySelector('.pdf-draw-layer'), wrap.clientWidth, wrap.clientHeight);
+        });
+        saveState(); showToast(`Applied ${kind}`, 'success');
+      }
+
+      function hexToRgbNorm(hex) {
+        const c = hex.replace('#', '');
+        return PDFLib.rgb(parseInt(c.slice(0, 2), 16) / 255, parseInt(c.slice(2, 4), 16) / 255, parseInt(c.slice(4, 6), 16) / 255);
+      }
+
+      async function buildAnnotatedPdfBytes(rec) {
+        const pdfDoc = await PDFLib.PDFDocument.load(pdfEditor.bytes);
+        const font = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+        pdfDoc.getPages().forEach((page, idx) => {
+          const ann = rec.annotations && rec.annotations[idx + 1]; if (!ann) return;
+          const { width, height } = page.getSize();
+          (ann.highlights || []).forEach(hl => {
+            const col = hexToRgbNorm(hl.color || '#fef08a');
+            hl.rects.forEach(r => {
+              const rx = r.x * width, rw = r.w * width, rh = r.h * height, ry = height - (r.y * height) - rh;
+              if (hl.kind === 'underline') page.drawLine({ start: { x: rx, y: ry }, end: { x: rx + rw, y: ry }, thickness: 1.5, color: col });
+              else if (hl.kind === 'strike') page.drawLine({ start: { x: rx, y: ry + rh * 0.5 }, end: { x: rx + rw, y: ry + rh * 0.5 }, thickness: 1.5, color: PDFLib.rgb(0.9, 0.2, 0.2) });
+              else page.drawRectangle({ x: rx, y: ry, width: rw, height: rh, color: col, opacity: 0.4 });
+            });
+          });
+          (ann.strokes || []).forEach(st => {
+            const col = hexToRgbNorm(st.color || '#ef4444');
+            for (let i = 1; i < st.pts.length; i++) page.drawLine({ start: { x: st.pts[i - 1].x * width, y: height - st.pts[i - 1].y * height }, end: { x: st.pts[i].x * width, y: height - st.pts[i].y * height }, thickness: 2, color: col });
+          });
+          (ann.textBoxes || []).forEach(tb => page.drawText(tb.text, { x: tb.x * width, y: height - tb.y * height, size: 10, font, color: PDFLib.rgb(0.05, 0.45, 0.4) }));
+          (ann.notes || []).forEach((sn, nIdx) => {
+            const nx = Math.min(width - 140, sn.x * width), ny = Math.max(24, height - sn.y * height);
+            page.drawRectangle({ x: nx, y: ny - 14, width: 135, height: 18, color: PDFLib.rgb(1, 0.95, 0.7) });
+            page.drawText(`Note ${nIdx + 1}: ${sn.text.slice(0, 24)}`, { x: nx + 4, y: ny - 9, size: 7.5, font, color: PDFLib.rgb(0.2, 0.15, 0) });
+          });
+        });
+        return await pdfDoc.save();
+      }
+
+      async function saveEditedPdfInApp(ws) {
+        if (!pdfEditor.bytes) return;
+        const rec = getActivePdfRecord();
+        const outBytes = await buildAnnotatedPdfBytes(rec);
+        const editedName = rec.name.startsWith('Edited_') ? rec.name : 'Edited_' + rec.name;
+        if (rec.isSample || !rec.isEdited) {
+          const newId = 'pdf_ed_' + Date.now();
+          await savePdfBytesToIDB(newId, outBytes);
+          state.pdfs.unshift({
+            id: newId,
+            name: editedName,
+            subject: rec.subject || state.subjects[0].name,
+            isSample: false,
+            isEdited: true,
+            annotations: {},
+            bookmarks: [...(rec.bookmarks || [])]
+          });
+          state.activePdfId = newId;
+        } else {
+          await savePdfBytesToIDB(rec.id, outBytes);
+          rec.annotations = {};
+          rec.isEdited = true;
+        }
+        saveState();
+        await renderPdfStudio(ws);
+        showToast(`Saved "${editedName}" in app library!`, 'success');
+      }
+
+      async function exportAnnotatedPdf() {
+        if (!pdfEditor.bytes) return;
+        const rec = getActivePdfRecord();
+        const outBytes = await buildAnnotatedPdfBytes(rec);
+        const blob = new Blob([outBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'Annotated_' + rec.name; a.click();
+        URL.revokeObjectURL(url); showToast('Exported annotated PDF!', 'success');
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+        if (state.activeTab === 'studio' && pdfEditor.studioSubTab === 'pdf') {
+          const k = e.key.toLowerCase();
+          if (k === 'h') { e.preventDefault(); applyTextAnnotation('highlight'); }
+          else if (k === 'u') { e.preventDefault(); applyTextAnnotation('underline'); }
+          else if (k === 's') { e.preventDefault(); applyTextAnnotation('strike'); }
+          else if (k === 'k') { e.preventDefault(); pdfEditor.kbMode = !pdfEditor.kbMode; pdfEditor.kbAnchorIdx = null; renderStudio(document.getElementById('mainView')); }
+          else if (k === 'p') { pdfEditor.tool = 'pen'; renderStudio(document.getElementById('mainView')); }
+          else if (k === 'n') { pdfEditor.tool = 'note'; renderStudio(document.getElementById('mainView')); }
+          else if (k === 't') { pdfEditor.tool = 'text'; renderStudio(document.getElementById('mainView')); }
+          else if (k === 'e') { pdfEditor.tool = 'eraser'; renderStudio(document.getElementById('mainView')); }
+          else if (k === '1') { pdfEditor.color = '#fef08a'; renderStudio(document.getElementById('mainView')); }
+          else if (k === '2') { pdfEditor.color = '#bbf7d0'; renderStudio(document.getElementById('mainView')); }
+          else if (k === '3') { pdfEditor.color = '#bae6fd'; renderStudio(document.getElementById('mainView')); }
+          else if (k === '4') { pdfEditor.color = '#fbcfe8'; renderStudio(document.getElementById('mainView')); }
+          else if (pdfEditor.kbMode && (e.key === 'ArrowRight' || e.key === 'ArrowDown')) {
+            e.preventDefault();
+            if (e.shiftKey && pdfEditor.kbAnchorIdx === null) pdfEditor.kbAnchorIdx = pdfEditor.kbCursorIdx;
+            if (!e.shiftKey) pdfEditor.kbAnchorIdx = null;
+            pdfEditor.kbCursorIdx = Math.min(pdfEditor.kbSpans.length - 1, pdfEditor.kbCursorIdx + (e.key === 'ArrowDown' ? 5 : 1));
+            updateKbCursorVisuals();
+          } else if (pdfEditor.kbMode && (e.key === 'ArrowLeft' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            if (e.shiftKey && pdfEditor.kbAnchorIdx === null) pdfEditor.kbAnchorIdx = pdfEditor.kbCursorIdx;
+            if (!e.shiftKey) pdfEditor.kbAnchorIdx = null;
+            pdfEditor.kbCursorIdx = Math.max(0, pdfEditor.kbCursorIdx - (e.key === 'ArrowUp' ? 5 : 1));
+            updateKbCursorVisuals();
+          }
+        } else if (state.activeTab === 'pomodoro') {
+          if (e.code === 'Space') { e.preventDefault(); togglePomodoro(); }
+          else if (e.key.toLowerCase() === 'r') {
+            clearInterval(pomoState.intervalId); pomoState.running = false;
+            pomoState.remaining = pomoState.durations[pomoState.mode]; updateMiniPomo(); renderMainView();
+          }
+        }
+      });
+
+      // 6. POMODORO VIEW
+      function renderPomodoro(el) {
+        const subNames = getSubjectNames();
+        const modes = [
+          { id: 'focus', label: 'Focus (25m)' }, { id: 'deep', label: 'Deep Study (50m)' },
+          { id: 'short', label: 'Short Break (5m)' }, { id: 'long', label: 'Long Break (15m)' }
+        ];
+        el.innerHTML = `
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-sm flex flex-col items-center text-center">
+              <div class="flex flex-wrap justify-center gap-2 mb-6">
+                ${modes.map(m => `<button data-pmode="${m.id}" class="px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${pomoState.mode === m.id ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}">${m.label}</button>`).join('')}
+              </div>
+              <div class="relative w-56 h-56 rounded-full border-8 border-teal-100 dark:border-teal-900/50 flex flex-col items-center justify-center mb-6">
+                ${pomoState.running ? '<div class="absolute inset-0 rounded-full border-4 border-teal-500 pulse-ring"></div>' : ''}
+                <div id="pomoClockDisplay" class="text-5xl font-extrabold tracking-tight font-mono">${formatMMSS(pomoState.remaining)}</div>
+                <div class="text-xs text-slate-500 mt-1">${escapeHtml(pomoState.subject)}</div>
+              </div>
+              <div class="flex flex-wrap items-center justify-center gap-3 mb-5">
+                <select id="pomoSubSel" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium">
+                  ${subNames.map(s => `<option value="${escapeHtml(s)}" ${pomoState.subject === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+                </select>
+                <button id="pomoStartBtn" class="px-6 py-2.5 rounded-xl bg-teal-600 text-white font-bold text-sm hover:bg-teal-700 shadow-sm">${pomoState.running ? 'Pause (Space)' : 'Start Focus (Space)'}</button>
+                <button id="pomoResetBtn" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-semibold hover:bg-slate-200">Reset (R)</button>
+              </div>
+              <button id="pomoNoiseBtn" class="px-4 py-2 rounded-xl text-xs font-semibold border transition ${pomoState.noiseOn ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}">
+                ${pomoState.noiseOn ? 'Brown Noise Ambience: ON' : 'Brown Noise Ambience: OFF'}
+              </button>
+            </div>
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <h3 class="font-bold text-base">Today's Study Log</h3>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="p-3 rounded-xl bg-teal-50 dark:bg-teal-900/20">
+                  <div class="text-[11px] text-teal-700 dark:text-teal-300 font-semibold">Sessions</div>
+                  <div class="text-2xl font-bold">${state.pomodoro.completedToday}</div>
+                </div>
+                <div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20">
+                  <div class="text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold">Total Focus</div>
+                  <div class="text-2xl font-bold">${state.pomodoro.totalMinutes}m</div>
+                </div>
+              </div>
+              <div class="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto scrollbar-thin">
+                ${state.pomodoro.history.map(h => `
+                  <div class="py-2.5 flex items-center justify-between text-xs">
+                    <div><div class="font-semibold">${escapeHtml(h.subject)}</div><div class="text-slate-400">${h.time}</div></div>
+                    <span class="px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-semibold">+${h.minutes}m</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+        el.querySelectorAll('[data-pmode]').forEach(b => b.addEventListener('click', () => {
+          clearInterval(pomoState.intervalId); pomoState.running = false;
+          pomoState.mode = b.dataset.pmode; pomoState.remaining = pomoState.durations[pomoState.mode];
+          updateMiniPomo(); renderPomodoro(el);
+        }));
+        document.getElementById('pomoSubSel').addEventListener('change', (e) => { pomoState.subject = e.target.value; renderPomodoro(el); });
+        document.getElementById('pomoStartBtn').addEventListener('click', togglePomodoro);
+        document.getElementById('pomoResetBtn').addEventListener('click', () => {
+          clearInterval(pomoState.intervalId); pomoState.running = false;
+          pomoState.remaining = pomoState.durations[pomoState.mode]; updateMiniPomo(); renderPomodoro(el);
+        });
+        document.getElementById('pomoNoiseBtn').addEventListener('click', toggleBrownNoise);
+      }
+
+      // 7. UPCOMING EXAMS
+      function renderExams(el) {
+        const sorted = [...state.exams].sort((a, b) => new Date(a.date) - new Date(b.date));
+        el.innerHTML = `
+          <div class="space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-sm text-slate-500 dark:text-slate-400">Track 3rd Year Internal Assessments, Practical Vivas & Marrow GTs.</p>
+              <div class="flex gap-2">
+                <button id="examImportPdfBtn" class="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Import Datesheet PDF/Img</button>
+                <button id="addExamBtn" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700">+ Add Exam</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${sorted.map(ex => {
+                const d = daysUntil(ex.date);
+                return `
+                  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between gap-4">
+                    <div>
+                      <div class="flex items-start justify-between gap-2">
+                        <span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${getSubjectBadgeCls(ex.subject)}">${escapeHtml(ex.subject)}</span>
+                        <button data-del-exam="${ex.id}" class="text-slate-400 hover:text-rose-600 text-xs">✕</button>
+                      </div>
+                      <h3 class="font-bold text-base mt-2">${escapeHtml(ex.title)}</h3>
+                      <p class="text-xs text-slate-500 mt-1">${escapeHtml(ex.notes || '')}</p>
+                    </div>
+                    <div>
+                      <div class="flex items-baseline justify-between mb-2">
+                        <span class="text-2xl font-extrabold ${d <= 7 ? 'text-rose-600' : 'text-teal-600'}">${d >= 0 ? d + ' days' : 'Passed'}</span>
+                        <span class="text-xs text-slate-400">${ex.date}</span>
+                      </div>
+                      <div class="flex items-center justify-between text-xs text-slate-500 mb-1"><span>Readiness</span><span>${ex.syllabusPct}%</span></div>
+                      <input type="range" min="0" max="100" value="${ex.syllabusPct}" data-exam-pct="${ex.id}" class="w-full accent-teal-600">
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+        document.getElementById('examImportPdfBtn').addEventListener('click', () => openSmartImportModal('exams'));
+        el.querySelectorAll('[data-del-exam]').forEach(b => b.addEventListener('click', () => {
+          state.exams = state.exams.filter(x => x.id !== b.dataset.delExam); saveState(); renderExams(el);
+        }));
+        el.querySelectorAll('[data-exam-pct]').forEach(r => r.addEventListener('change', () => {
+          const ex = state.exams.find(x => x.id === r.dataset.examPct);
+          if (ex) { ex.syllabusPct = parseInt(r.value, 10); saveState(); renderExams(el); }
+        }));
+        document.getElementById('addExamBtn').addEventListener('click', () => {
+          openAppModal(`
+            <h3 class="font-bold text-base mb-3">Add Upcoming Exam</h3>
+            <form id="addExamForm" class="space-y-3 text-sm">
+              <input id="exTitle" type="text" required placeholder="Exam Title" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <select id="exSub" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                ${getSubjectNames().map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+              </select>
+              <input id="exDate" type="date" required class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <input id="exNotes" type="text" placeholder="Portions / Notes" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="cancelAppModal" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Cancel</button>
+                <button type="submit" class="px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold">Save Exam</button>
+              </div>
+            </form>
+          `, () => {
+            document.getElementById('addExamForm').addEventListener('submit', (e) => {
+              e.preventDefault();
+              state.exams.push({
+                id: 'e_' + Date.now(), title: document.getElementById('exTitle').value.trim(),
+                subject: document.getElementById('exSub').value, date: document.getElementById('exDate').value,
+                syllabusPct: 20, notes: document.getElementById('exNotes').value.trim()
+              });
+              saveState(); closeAppModal(); renderExams(el);
+            });
+          });
+        });
+      }
+
+      // 8. MESS MENU (with Image-based PDF OCR Importer)
+      function renderMessMenu(el) {
+        const today = getTodayDayName();
+        const days = Object.keys(state.messMenu);
+        const meals = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
+        el.innerHTML = `
+          <div class="space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div>
+                <h3 class="font-bold text-sm">Hostel Weekly Mess Schedule</h3>
+                <p class="text-xs text-slate-500">Upload your weekly mess menu PDF or photo to auto-update, or click any cell to edit. Today (<strong>${today}</strong>) is highlighted.</p>
+              </div>
+              <button id="messImportPdfBtn" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">⇪ Upload Mess Menu Image / PDF</button>
+            </div>
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto shadow-sm">
+              <table class="w-full text-left border-collapse min-w-[680px]">
+                <thead>
+                  <tr class="bg-slate-50 dark:bg-slate-800/70 text-xs font-semibold text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                    <th class="p-3.5 w-28">Day</th>
+                    ${meals.map(m => `<th class="p-3.5">${m}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-xs sm:text-sm">
+                  ${days.map(day => `
+                    <tr class="${day === today ? 'bg-teal-50/70 dark:bg-teal-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}">
+                      <td class="p-3.5 font-bold ${day === today ? 'text-teal-700 dark:text-teal-300' : ''}">${day} ${day === today ? '★' : ''}</td>
+                      ${meals.map(m => `
+                        <td class="p-3.5">
+                          <div contenteditable="true" data-mess-day="${day}" data-mess-meal="${m}" class="rounded px-1.5 py-1 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500">${escapeHtml(state.messMenu[day][m] || '')}</div>
+                        </td>
+                      `).join('')}
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        document.getElementById('messImportPdfBtn').addEventListener('click', () => openSmartImportModal('mess'));
+        el.querySelectorAll('[data-mess-day]').forEach(cell => cell.addEventListener('blur', () => {
+          state.messMenu[cell.dataset.messDay][cell.dataset.messMeal] = cell.textContent.trim();
+          saveState(); showToast('Mess menu updated', 'success');
+        }));
+      }
+
+      // ================== CROSS-DEVICE SYNC ==================
+      let rtcPeer = null, rtcChannel = null;
+      function applyIncomingSync(incoming, sourceLabel) {
+        if (!incoming || typeof incoming !== 'object') return;
+        const keepTab = state.activeTab, keepDev = state.deviceName;
+        state = Object.assign(getDefaultState(), incoming, { activeTab: keepTab, deviceName: keepDev });
+        saveState(true); applyTheme(); renderNav(); renderMainView();
+        showToast(`Synced from ${sourceLabel}!`, 'success');
+      }
+      function setupRtcPeer() {
+        rtcPeer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        rtcPeer.oniceconnectionstatechange = () => {
+          const badge = document.getElementById('rtcStatusBadge');
+          if (badge) badge.textContent = rtcPeer.iceConnectionState;
+        };
+      }
+      function bindRtcChannel(ch) {
+        rtcChannel = ch;
+        ch.onopen = () => {
+          document.getElementById('rtcStatusBadge').textContent = 'Connected';
+          document.getElementById('syncPeerBadge').textContent = 'P2P Live';
+          document.getElementById('rtcConnectedActions').classList.remove('hidden');
+          showToast('Direct P2P Device Link Connected!', 'success');
+        };
+        ch.onmessage = (ev) => {
+          try { const msg = JSON.parse(ev.data); if (msg.type === 'SYNC_STATE') applyIncomingSync(msg.payload, 'Peer Device'); } catch (e) {}
+        };
+      }
+      document.getElementById('rtcCreateOfferBtn').addEventListener('click', async () => {
+        setupRtcPeer(); bindRtcChannel(rtcPeer.createDataChannel('medpulse'));
+        rtcPeer.onicecandidate = (e) => { if (!e.candidate) document.getElementById('rtcOfferOut').value = btoa(JSON.stringify(rtcPeer.localDescription)); };
+        await rtcPeer.setLocalDescription(await rtcPeer.createOffer());
+      });
+      document.getElementById('rtcCreateAnswerBtn').addEventListener('click', async () => {
+        try {
+          setupRtcPeer(); rtcPeer.ondatachannel = (ev) => bindRtcChannel(ev.channel);
+          rtcPeer.onicecandidate = (e) => { if (!e.candidate) document.getElementById('rtcAnswerOut').value = btoa(JSON.stringify(rtcPeer.localDescription)); };
+          await rtcPeer.setRemoteDescription(JSON.parse(atob(document.getElementById('rtcOfferIn').value.trim())));
+          await rtcPeer.setLocalDescription(await rtcPeer.createAnswer());
+        } catch (e) { showToast('Invalid Offer code', 'error'); }
+      });
+      document.getElementById('rtcAcceptAnswerBtn').addEventListener('click', async () => {
+        try { await rtcPeer.setRemoteDescription(JSON.parse(atob(document.getElementById('rtcAnswerIn').value.trim()))); }
+        catch (e) { showToast('Invalid Answer code', 'error'); }
+      });
+      document.getElementById('rtcPushNowBtn').addEventListener('click', () => {
+        if (rtcChannel && rtcChannel.readyState === 'open') {
+          rtcChannel.send(JSON.stringify({ type: 'SYNC_STATE', payload: state }));
+          showToast('Pushed full study data to peer!', 'success');
+        }
+      });
+      document.getElementById('copySyncCodeBtn').addEventListener('click', () => {
+        const slim = JSON.parse(JSON.stringify(state));
+        slim.pdfs = slim.pdfs.map(p => p.dataUrl && p.dataUrl.length > 200000 ? Object.assign({}, p, { dataUrl: null }) : p);
+        const code = btoa(unescape(encodeURIComponent(JSON.stringify(slim))));
+        if (navigator.clipboard) navigator.clipboard.writeText(code).catch(() => fallbackCopy(code));
+        else fallbackCopy(code);
+        showToast('Sync Code copied! Paste it on your other device.', 'success');
+      });
+      function fallbackCopy(text) {
+        const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      document.getElementById('applySyncCodeBtn').addEventListener('click', () => {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(escape(atob(document.getElementById('pasteSyncCodeInput').value.trim()))));
+          applyIncomingSync(parsed, 'Sync Code'); document.getElementById('pasteSyncCodeInput').value = '';
+        } catch (e) { showToast('Invalid Sync Code', 'error'); }
+      });
+      document.getElementById('downloadBackupBtn').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `MedPulse_Backup_${getTodayStr()}.json`; a.click(); URL.revokeObjectURL(url);
+      });
+      document.getElementById('importBackupInput').addEventListener('change', (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const r = new FileReader();
+        r.onload = () => { try { applyIncomingSync(JSON.parse(r.result), 'JSON Backup'); } catch (err) { showToast('Invalid JSON backup file', 'error'); } };
+        r.readAsText(file);
+      });
+
+      function openAppModal(html, onReady) {
+        const m = document.getElementById('appModal'), c = document.getElementById('appModalContent');
+        c.innerHTML = html; m.classList.remove('hidden'); m.classList.add('flex');
+        const cancelBtn = document.getElementById('cancelAppModal');
+        if (cancelBtn) cancelBtn.addEventListener('click', closeAppModal);
+        if (onReady) onReady();
+      }
+      function closeAppModal() {
+        const m = document.getElementById('appModal'); m.classList.add('hidden'); m.classList.remove('flex');
+      }
+      function openSyncModal() {
+        document.getElementById('deviceNameInput').value = state.deviceName || 'My Study Device';
+        document.getElementById('lastSyncedLabel').textContent = 'Last saved: ' + new Date(state.lastSynced).toLocaleTimeString();
+        const m = document.getElementById('syncModal'); m.classList.remove('hidden'); m.classList.add('flex');
+      }
+      document.getElementById('closeSyncModal').addEventListener('click', () => {
+        const m = document.getElementById('syncModal'); m.classList.add('hidden'); m.classList.remove('flex');
+      });
+      document.getElementById('openSyncBtnSidebar').addEventListener('click', openSyncModal);
+      document.getElementById('openSyncBtnTop').addEventListener('click', openSyncModal);
+      document.getElementById('saveDeviceNameBtn').addEventListener('click', () => {
+        state.deviceName = document.getElementById('deviceNameInput').value.trim() || 'My Study Device';
+        saveState(); showToast('Device name saved', 'success');
+      });
+
+      function toggleTheme() { state.darkMode = !state.darkMode; saveState(); applyTheme(); }
+      document.getElementById('themeToggleDesktop').addEventListener('click', toggleTheme);
+      document.getElementById('themeToggleMobile').addEventListener('click', toggleTheme);
+      document.getElementById('mobileMenuBtn').addEventListener('click', () => document.getElementById('mobileDrawer').classList.remove('hidden'));
+      document.getElementById('closeMobileDrawer').addEventListener('click', () => document.getElementById('mobileDrawer').classList.add('hidden'));
+      document.getElementById('mobileDrawerBackdrop').addEventListener('click', () => document.getElementById('mobileDrawer').classList.add('hidden'));
+      document.getElementById('miniPomoBtn').addEventListener('click', () => {
+        state.activeTab = 'pomodoro'; saveState(true); renderNav(); renderMainView();
+      });
+
+      function escapeHtml(str) {
+        return String(str || '').replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+      }
+
+      renderNav();
+      renderMainView();
+      updateMiniPomo();
+    })();
+  </script>
+</body>
+</html>
