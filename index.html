@@ -453,6 +453,7 @@
             { id: 'hol1', date: addDays(7), name: 'Gazetted Holiday' }
           ],
           dailyAttendanceLog: {},
+          monthlySnapshots: {},
           excludeSundays: true,
           syllabus: DEFAULT_SYLLABUS,
           messMenu: DEFAULT_MESS_MENU,
@@ -1354,38 +1355,77 @@ Supported actions:
         return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
       }
 
+      let selectedAttDate = getTodayStr();
+
+      function recomputeAttendanceAndMonthly() {
+        // Reset counts on existing attendance records and recompute cleanly from calendar logs
+        const map = {};
+        state.attendance.forEach(a => {
+          a.attended = 0; a.total = 0;
+          map[`${a.subject}|${a.type}`] = a;
+        });
+
+        const monthTotals = {}; // { 'YYYY-MM': { thAtt, thTot, prAtt, prTot } }
+        const logs = state.dailyAttendanceLog || {};
+        Object.keys(logs).forEach(dateStr => {
+          const dayName = getDayNameFromDateStr(dateStr);
+          const daySlots = (state.schedule || []).filter(sl => sl.day === dayName);
+          const ym = dateStr.slice(0, 7);
+          if (!monthTotals[ym]) monthTotals[ym] = { thAtt: 0, thTot: 0, prAtt: 0, prTot: 0 };
+
+          Object.keys(logs[dateStr]).forEach(slotId => {
+            const st = logs[dateStr][slotId];
+            if (st !== 'present' && st !== 'absent') return;
+            const slot = daySlots.find(x => x.id === slotId) || (state.schedule || []).find(x => x.id === slotId);
+            if (!slot) return;
+            const key = `${slot.subject}|${slot.type}`;
+            if (!map[key]) {
+              const rec = { id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5), subject: slot.subject, type: slot.type, attended: 0, total: 0, target: slot.type === 'Theory' ? 75 : 80 };
+              state.attendance.push(rec);
+              map[key] = rec;
+            }
+            map[key].total++;
+            if (st === 'present') map[key].attended++;
+
+            if (slot.type === 'Theory') {
+              monthTotals[ym].thTot++;
+              if (st === 'present') monthTotals[ym].thAtt++;
+            } else {
+              monthTotals[ym].prTot++;
+              if (st === 'present') monthTotals[ym].prAtt++;
+            }
+          });
+        });
+
+        if (!state.monthlySnapshots) state.monthlySnapshots = {};
+        Object.keys(monthTotals).forEach(ym => {
+          const mt = monthTotals[ym];
+          const tot = mt.thTot + mt.prTot;
+          const att = mt.thAtt + mt.prAtt;
+          state.monthlySnapshots[ym] = {
+            month: ym,
+            theoryPct: mt.thTot ? Math.round((mt.thAtt / mt.thTot) * 1000) / 10 : null,
+            practicalPct: mt.prTot ? Math.round((mt.prAtt / mt.prTot) * 1000) / 10 : null,
+            overallPct: tot ? Math.round((att / tot) * 1000) / 10 : 0,
+            attended: att,
+            total: tot,
+            savedAt: new Date().toISOString()
+          };
+        });
+      }
+
       function logDailyClassStatus(dateStr, slot, status) {
         if (!state.dailyAttendanceLog) state.dailyAttendanceLog = {};
         if (!state.dailyAttendanceLog[dateStr]) state.dailyAttendanceLog[dateStr] = {};
-        const prev = state.dailyAttendanceLog[dateStr][slot.id];
-        if (prev === status) return;
-
-        // Find matching attendance record or create one
-        let attRec = state.attendance.find(a => a.subject === slot.subject && a.type === slot.type);
-        if (!attRec) {
-          attRec = {
-            id: 'a_' + Date.now(),
-            subject: slot.subject,
-            type: slot.type,
-            attended: 0,
-            total: 0,
-            target: slot.type === 'Theory' ? 75 : 80
-          };
-          state.attendance.push(attRec);
+        if (state.dailyAttendanceLog[dateStr][slot.id] === status) {
+          delete state.dailyAttendanceLog[dateStr][slot.id]; // Toggle off if tapped again
+        } else {
+          state.dailyAttendanceLog[dateStr][slot.id] = status;
         }
-
-        // Revert previous log impact
-        if (prev === 'present') { attRec.attended = Math.max(0, attRec.attended - 1); attRec.total = Math.max(0, attRec.total - 1); }
-        else if (prev === 'absent') { attRec.total = Math.max(0, attRec.total - 1); }
-
-        // Apply new status
-        if (status === 'present') { attRec.attended++; attRec.total++; }
-        else if (status === 'absent') { attRec.total++; }
-
-        state.dailyAttendanceLog[dateStr][slot.id] = status;
+        recomputeAttendanceAndMonthly();
         saveState();
         renderMainView();
-        showToast(`${slot.subject}: marked ${status.toUpperCase()}`, 'success');
+        showToast(`${slot.subject} (${dateStr}): ${state.dailyAttendanceLog[dateStr][slot.id] || 'cleared'}`, 'success');
       }
 
       function renderDailyCheckinCard(dateStr) {
@@ -1399,12 +1439,15 @@ Supported actions:
           <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 class="font-bold text-sm sm:text-base">Daily Class Check-in (${dayName}, ${dateStr})</h3>
-                <p class="text-xs text-slate-500">Tap whether you attended each scheduled class today — holidays are excluded.</p>
+                <h3 class="font-bold text-sm sm:text-base">Schedule for ${dayName}, ${dateStr}</h3>
+                <p class="text-xs text-slate-500">Mark Present / Absent / Off for each class on this date (updates 75% Theory &amp; 80% Practical counts).</p>
               </div>
-              <button data-mark-today-hol="${dateStr}" class="px-3 py-1.5 rounded-xl text-xs font-semibold ${isHoliday ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-50'}">
-                ${isHoliday ? '★ Holiday Active' : 'Mark Today Holiday'}
-              </button>
+              <div class="flex flex-wrap gap-1.5">
+                ${!isHoliday && todaySlots.length ? `<button data-mark-all-present="${dateStr}" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100">✓ All Present</button>` : ''}
+                <button data-mark-today-hol="${dateStr}" class="px-3 py-1.5 rounded-xl text-xs font-semibold ${isHoliday ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-50'}">
+                  ${isHoliday ? '★ Holiday Active' : 'Mark Holiday'}
+                </button>
+              </div>
             </div>
             ${isHoliday ? `
               <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 text-xs font-medium">
@@ -1443,6 +1486,17 @@ Supported actions:
           const [dateStr, slotId, status] = btn.dataset.checkin.split('|');
           const slot = (state.schedule || []).find(s => s.id === slotId);
           if (slot) logDailyClassStatus(dateStr, slot, status);
+        }));
+        container.querySelectorAll('[data-mark-all-present]').forEach(btn => btn.addEventListener('click', () => {
+          const d = btn.dataset.markAllPresent;
+          const dayName = getDayNameFromDateStr(d);
+          const slots = (state.schedule || []).filter(s => s.day === dayName);
+          if (!state.dailyAttendanceLog) state.dailyAttendanceLog = {};
+          if (!state.dailyAttendanceLog[d]) state.dailyAttendanceLog[d] = {};
+          slots.forEach(sl => { state.dailyAttendanceLog[d][sl.id] = 'present'; });
+          recomputeAttendanceAndMonthly();
+          saveState(); renderMainView();
+          showToast(`Marked all ${slots.length} classes present on ${d}`, 'success');
         }));
         container.querySelectorAll('[data-mark-today-hol]').forEach(btn => btn.addEventListener('click', () => {
           const d = btn.dataset.markTodayHol;
@@ -1725,7 +1779,74 @@ Supported actions:
 
         el.innerHTML = `
           <div class="space-y-6">
-            ${renderDailyCheckinCard(todayStr)}
+            
+            <!-- Interactive Calendar-Wise Attendance -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              <div class="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 class="font-bold text-sm">Attendance Calendar</h4>
+                    <p class="text-[11px] text-slate-500">Tap any date (even before Nov 8) to view &amp; mark that day's classes.</p>
+                  </div>
+                  <input id="calMonthPick" type="month" value="${selectedAttMonth}" class="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400">
+                  <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                </div>
+                <div class="grid grid-cols-7 gap-1">
+                  ${(() => {
+                    const [y, m] = selectedAttMonth.split('-').map(Number);
+                    const firstDay = new Date(y, m - 1, 1).getDay();
+                    const daysInM = new Date(y, m, 0).getDate();
+                    const holSet = getHolidaySet();
+                    let cells = '';
+                    for (let i = 0; i < firstDay; i++) cells += '<div></div>';
+                    for (let d = 1; d <= daysInM; d++) {
+                      const ds = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                      const dn = getDayNameFromDateStr(ds);
+                      const isHol = holSet.has(ds) || (state.excludeSundays && dn === 'Sunday');
+                      const log = (state.dailyAttendanceLog && state.dailyAttendanceLog[ds]) || {};
+                      const vals = Object.values(log);
+                      const pCnt = vals.filter(v => v === 'present').length;
+                      const aCnt = vals.filter(v => v === 'absent').length;
+                      const isSel = selectedAttDate === ds;
+                      const isToday = ds === todayStr;
+                      cells += `
+                        <button data-cal-date="${ds}" class="p-1.5 rounded-xl border text-center transition flex flex-col items-center justify-center min-h-[46px] ${isSel ? 'border-teal-600 bg-teal-50 dark:bg-teal-900/30 ring-2 ring-teal-500/40' : isHol ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20' : 'border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}">
+                          <span class="text-xs font-bold ${isToday ? 'text-teal-600 underline' : ''}">${d}</span>
+                          <span class="text-[9px] leading-tight mt-0.5">${isHol ? 'Off' : (pCnt || aCnt) ? `<span class="text-emerald-600">${pCnt}✓</span> <span class="text-rose-600">${aCnt}✗</span>` : '·'}</span>
+                        </button>
+                      `;
+                    }
+                    return cells;
+                  })()}
+                </div>
+              </div>
+              <div class="lg:col-span-6">
+                ${renderDailyCheckinCard(selectedAttDate)}
+              </div>
+            </div>
+
+            <!-- Saved Monthly Attendance Percentage History -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-2">
+              <div class="flex items-center justify-between">
+                <h4 class="font-bold text-sm">Saved Monthly Attendance Percentages</h4>
+                <button id="saveMonthSnapBtn" class="px-3 py-1 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs font-semibold hover:bg-teal-100">Save ${selectedAttMonth} Snapshot</button>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                ${Object.values(state.monthlySnapshots || {}).sort((a, b) => b.month.localeCompare(a.month)).map(ms => `
+                  <div class="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
+                    <div class="font-bold">${ms.month}</div>
+                    <div class="text-slate-600 dark:text-slate-300 mt-0.5">
+                      Overall: <strong>${ms.overallPct}%</strong> (${ms.attended}/${ms.total})
+                      ${ms.theoryPct !== null ? ` • Theory: <strong>${ms.theoryPct}%</strong>` : ''}
+                      ${ms.practicalPct !== null ? ` • Prac: <strong>${ms.practicalPct}%</strong>` : ''}
+                    </div>
+                  </div>
+                `).join('') || '<p class="text-xs text-slate-400">Mark classes on the calendar above to auto-save monthly percentages.</p>'}
+              </div>
+            </div>
+
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -2021,6 +2142,13 @@ Supported actions:
         bindDailyCheckinHandlers(el);
         document.getElementById('importSchedulePdfBtn').addEventListener('click', () => openSmartImportModal('schedule'));
         document.getElementById('attMonthPick').addEventListener('change', (e) => { selectedAttMonth = e.target.value; renderAttendance(el); });
+        document.getElementById('calMonthPick').addEventListener('change', (e) => { selectedAttMonth = e.target.value; selectedAttDate = selectedAttMonth + '-01'; renderAttendance(el); });
+        el.querySelectorAll('[data-cal-date]').forEach(b => b.addEventListener('click', () => { selectedAttDate = b.dataset.calDate; renderAttendance(el); }));
+        document.getElementById('saveMonthSnapBtn').addEventListener('click', () => {
+          recomputeAttendanceAndMonthly();
+          saveState(); renderAttendance(el);
+          showToast(`Saved ${selectedAttMonth} attendance snapshot!`, 'success');
+        });
         document.getElementById('exclSunCb').addEventListener('change', (e) => { state.excludeSundays = e.target.checked; saveState(); renderAttendance(el); });
         document.getElementById('addHolForm').addEventListener('submit', (e) => {
           e.preventDefault();
