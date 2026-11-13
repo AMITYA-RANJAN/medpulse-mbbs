@@ -248,6 +248,7 @@
       <div class="p-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 space-y-2 text-xs">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <select id="aiProviderSel" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold">
+            <option value="local">Built-in Smart Parser (No API Key)</option>
             <option value="gemini">Google Gemini</option>
             <option value="openai">OpenAI (ChatGPT)</option>
             <option value="custom">Custom OpenAI-Compatible</option>
@@ -702,13 +703,63 @@
         showToast('AI settings saved locally!', 'success');
       });
 
+      function runLocalAiFallback(prompt) {
+        const low = prompt.toLowerCase();
+        const sub = matchSubjectFromText(prompt);
+        const targetSub = sub === 'General' ? state.subjects[0].name : sub;
+        const dm = prompt.match(/(\d{4}-\d{2}-\d{2})/);
+        const dateStr = dm ? dm[1] : (/tomorrow/i.test(low) ? new Date(Date.now() + 86400000).toISOString().slice(0, 10) : getTodayStr());
+        const dayMatch = prompt.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+        const dayName = dayMatch ? dayMatch[1][0].toUpperCase() + dayMatch[1].slice(1).toLowerCase() : getDayNameFromDateStr(dateStr);
+        const tm = prompt.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i);
+        const timeStr = tm ? tm[1].toUpperCase() : '09:00 PM';
+
+        if (/holiday|off|leave/i.test(low)) {
+          executeAiActions([{ action: 'add_holiday', date: dateStr, name: prompt.replace(/mark|add|as|holiday/gi, '').trim() || 'Holiday' }]);
+          return `Added Holiday on ${dateStr}.`;
+        }
+        if (/lecture|class|posting|ward|schedule|lab/i.test(low)) {
+          const isPrac = /posting|ward|prac|lab|clinic/i.test(low);
+          executeAiActions([{ action: 'add_schedule', day: dayName === 'Sunday' ? 'Monday' : dayName, time: timeStr, subject: targetSub, type: isPrac ? 'Practical' : 'Theory' }]);
+          return `Added ${targetSub} (${isPrac ? 'Practical' : 'Theory'}) on ${dayName} at ${timeStr}.`;
+        }
+        if (/exam|test|viva|assessment|gt/i.test(low)) {
+          executeAiActions([{ action: 'add_exam', title: prompt.replace(/^add\s+/i, '').trim(), subject: targetSub, date: dateStr }]);
+          return `Added Exam "${prompt}" on ${dateStr}.`;
+        }
+        if (/mess|breakfast|lunch|snacks|dinner/i.test(low)) {
+          const meal = /breakfast/i.test(low) ? 'Breakfast' : /lunch/i.test(low) ? 'Lunch' : /snack/i.test(low) ? 'Snacks' : 'Dinner';
+          const items = prompt.replace(/.*?(to|as|:)\s*/i, '').trim() || prompt;
+          executeAiActions([{ action: 'update_mess', day: dayName, meal, items }]);
+          return `Updated ${dayName} ${meal} to "${items}".`;
+        }
+        executeAiActions([{ action: 'add_todo', text: prompt.replace(/^add\s+(task|todo|to-do)\s*/i, '').trim(), subject: targetSub, priority: /high|urgent|imp/i.test(low) ? 'High' : 'Medium', due: dateStr }]);
+        return `Added To-Do "${prompt}" under ${targetSub} (Due ${dateStr}).`;
+      }
+
       document.getElementById('aiChatForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const prompt = document.getElementById('aiPromptIn').value.trim();
         if (!prompt) return;
-        if (!aiCfg.key) { showToast('Paste and save your Gemini or OpenAI API key first', 'error'); return; }
+        // Auto-sync UI config so forgetting to click Save doesn't block
+        aiCfg = {
+          provider: document.getElementById('aiProviderSel').value,
+          model: document.getElementById('aiModelIn').value.trim(),
+          key: document.getElementById('aiKeyIn').value.trim(),
+          baseUrl: document.getElementById('aiBaseUrlIn').value.trim()
+        };
+        try { localStorage.setItem(AI_CFG_KEY, JSON.stringify(aiCfg)); } catch (err) {}
+
         document.getElementById('aiPromptIn').value = '';
         appendAiChatMsg('user', prompt);
+
+        if (aiCfg.provider === 'local' || !aiCfg.key) {
+          const reply = runLocalAiFallback(prompt);
+          appendAiChatMsg('ai', reply + (!aiCfg.key && aiCfg.provider !== 'local' ? ' (Handled locally — add API key for full AI chat)' : ''));
+          return;
+        }
+        const sendBtn = document.getElementById('aiSendBtn');
+        sendBtn.disabled = true; sendBtn.textContent = '...';
 
         const sysPrompt = `You control the MedPulse MBBS app. Today is ${getTodayStr()} (${getTodayDayName()}). Available subjects: ${getSubjectNames().join(', ')}.
 Return ONLY valid JSON: {"reply":"short confirmation","actions":[...]}
@@ -750,11 +801,15 @@ Supported actions:
             if (!res.ok) throw new Error(data.error?.message || res.status);
             rawText = data.choices?.[0]?.message?.content || '{}';
           }
-          const parsed = JSON.parse(rawText.replace(/^```json|```$/g, '').trim());
+          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+          const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
           const applied = executeAiActions(parsed.actions);
           appendAiChatMsg('ai', `${parsed.reply || 'Done!'} (${applied} change${applied === 1 ? '' : 's'} applied)`);
         } catch (err) {
-          appendAiChatMsg('ai', 'Error: ' + err.message);
+          const fallbackReply = runLocalAiFallback(prompt);
+          appendAiChatMsg('ai', `API error (${err.message}) — applied locally instead: ${fallbackReply}`);
+        } finally {
+          sendBtn.disabled = false; sendBtn.textContent = 'Send';
         }
       });
 
