@@ -253,7 +253,7 @@
             <option value="openai">OpenAI (ChatGPT)</option>
             <option value="custom">Custom OpenAI-Compatible</option>
           </select>
-          <input id="aiModelIn" type="text" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Model (e.g. gemini-2.5-flash)">
+          <input id="aiModelIn" type="text" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Model (e.g. gemini-3.8-flash)">
           <input id="aiKeyIn" type="password" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono" placeholder="Paste API Key (saved locally)">
         </div>
         <div id="aiCustomUrlRow" class="hidden flex gap-2">
@@ -272,9 +272,26 @@
         </div>
       </div>
 
+      <!-- Attachment Toolbar & Preview -->
+      <div class="px-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-1.5 text-xs">
+        <label class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer font-medium">
+          🖼 Image<input id="aiImgIn" type="file" accept="image/*" class="hidden">
+        </label>
+        <label class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer font-medium">
+          📷 Camera<input id="aiCamIn" type="file" accept="image/*" capture="environment" class="hidden">
+        </label>
+        <label class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer font-medium">
+          📎 File / PDF<input id="aiFileIn" type="file" accept="application/pdf,.txt,.csv,.md,.json" class="hidden">
+        </label>
+        <div id="aiAttachPreview" class="hidden flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 font-medium">
+          <span id="aiAttachName" class="truncate max-w-[160px]"></span>
+          <button id="aiClearAttachBtn" type="button" class="text-rose-600 font-bold">✕</button>
+        </div>
+      </div>
+
       <!-- Prompt Input -->
-      <form id="aiChatForm" class="p-3 border-t border-slate-100 dark:border-slate-800 flex gap-2">
-        <input id="aiPromptIn" type="text" required class="flex-1 px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Tell AI what to add or update...">
+      <form id="aiChatForm" class="p-3 flex gap-2">
+        <input id="aiPromptIn" type="text" class="flex-1 px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Tell AI what to add, or attach photo/PDF...">
         <button id="aiSendBtn" type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Send</button>
       </form>
     </div>
@@ -360,23 +377,39 @@
       ];
 
       const DEFAULT_SCHEDULE = [
-        { id: 'sc1', day: 'Monday', time: '08:00 - 09:00', subject: 'Community Medicine', type: 'Theory' },
-        { id: 'sc2', day: 'Monday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
-        { id: 'sc3', day: 'Monday', time: '14:00 - 15:00', subject: 'Ophthalmology', type: 'Theory' },
-        { id: 'sc4', day: 'Tuesday', time: '08:00 - 09:00', subject: 'ENT', type: 'Theory' },
-        { id: 'sc5', day: 'Tuesday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
-        { id: 'sc6', day: 'Tuesday', time: '14:00 - 16:00', subject: 'Community Medicine', type: 'Practical' },
-        { id: 'sc7', day: 'Wednesday', time: '08:00 - 09:00', subject: 'Ophthalmology', type: 'Theory' },
-        { id: 'sc8', day: 'Wednesday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
-        { id: 'sc9', day: 'Wednesday', time: '14:00 - 15:00', subject: 'Forensic Medicine', type: 'Theory' },
-        { id: 'sc10', day: 'Thursday', time: '08:00 - 09:00', subject: 'Community Medicine', type: 'Theory' },
-        { id: 'sc11', day: 'Thursday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
-        { id: 'sc12', day: 'Thursday', time: '14:00 - 16:00', subject: 'ENT', type: 'Practical' },
-        { id: 'sc13', day: 'Friday', time: '08:00 - 09:00', subject: 'Ophthalmology', type: 'Practical' },
-        { id: 'sc14', day: 'Friday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' },
-        { id: 'sc15', day: 'Friday', time: '14:00 - 15:00', subject: 'ENT', type: 'Theory' },
-        { id: 'sc16', day: 'Saturday', time: '08:00 - 09:00', subject: 'AETCOM', type: 'Theory' },
-        { id: 'sc17', day: 'Saturday', time: '09:00 - 12:00', subject: 'Clinical Postings', type: 'Practical' }
+        // Monday
+        { id: 'sc_m1', day: 'Monday', time: '09:00 - 10:00 AM', subject: 'ENT', type: 'Theory' },
+        { id: 'sc_m2', day: 'Monday', time: '10:00 AM - 01:00 PM', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc_m3', day: 'Monday', time: '02:00 - 03:00 PM', subject: 'Community Medicine', type: 'Theory' },
+        { id: 'sc_m4', day: 'Monday', time: '03:00 - 05:00 PM', subject: 'Forensic Medicine', type: 'Practical' },
+        // Tuesday
+        { id: 'sc_t1', day: 'Tuesday', time: '09:00 - 10:00 AM', subject: 'General Medicine', type: 'Theory' },
+        { id: 'sc_t2', day: 'Tuesday', time: '10:00 AM - 01:00 PM', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc_t3', day: 'Tuesday', time: '02:00 - 03:00 PM', subject: 'OBGYN', type: 'Theory' },
+        { id: 'sc_t4', day: 'Tuesday', time: '03:00 - 04:00 PM', subject: 'Ophthalmology', type: 'Theory' },
+        { id: 'sc_t5', day: 'Tuesday', time: '04:00 - 05:00 PM', subject: 'General Surgery', type: 'Theory' },
+        // Wednesday
+        { id: 'sc_w1', day: 'Wednesday', time: '09:00 - 10:00 AM', subject: 'ENT', type: 'Theory' },
+        { id: 'sc_w2', day: 'Wednesday', time: '10:00 AM - 01:00 PM', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc_w3', day: 'Wednesday', time: '02:00 - 03:00 PM', subject: 'Pediatrics', type: 'Theory' },
+        { id: 'sc_w4', day: 'Wednesday', time: '03:00 - 04:00 PM', subject: 'Ophthalmology', type: 'Theory' },
+        { id: 'sc_w5', day: 'Wednesday', time: '04:00 - 05:00 PM', subject: 'AETCOM', type: 'Theory' },
+        // Thursday
+        { id: 'sc_th1', day: 'Thursday', time: '09:00 - 10:00 AM', subject: 'Forensic Medicine', type: 'Theory' },
+        { id: 'sc_th2', day: 'Thursday', time: '10:00 AM - 01:00 PM', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc_th3', day: 'Thursday', time: '02:00 - 03:00 PM', subject: 'General Surgery', type: 'Theory' },
+        { id: 'sc_th4', day: 'Thursday', time: '03:00 - 05:00 PM', subject: 'Community Medicine', type: 'Practical' },
+        // Friday
+        { id: 'sc_f1', day: 'Friday', time: '09:00 - 10:00 AM', subject: 'Community Medicine', type: 'Theory' },
+        { id: 'sc_f2', day: 'Friday', time: '10:00 AM - 01:00 PM', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc_f3', day: 'Friday', time: '02:00 - 03:00 PM', subject: 'General Medicine', type: 'Theory' },
+        { id: 'sc_f4', day: 'Friday', time: '03:00 - 04:00 PM', subject: 'ENT', type: 'Theory' },
+        { id: 'sc_f5', day: 'Friday', time: '04:00 - 05:00 PM', subject: 'OBGYN', type: 'Theory' },
+        // Saturday
+        { id: 'sc_s1', day: 'Saturday', time: '09:00 - 10:00 AM', subject: 'Pediatrics', type: 'Theory' },
+        { id: 'sc_s2', day: 'Saturday', time: '10:00 AM - 01:00 PM', subject: 'Clinical Postings', type: 'Practical' },
+        { id: 'sc_s3', day: 'Saturday', time: '02:00 - 03:00 PM', subject: 'Ophthalmology', type: 'Theory' },
+        { id: 'sc_s4', day: 'Saturday', time: '03:00 - 04:00 PM', subject: 'Forensic Medicine', type: 'Theory' }
       ];
 
       const DEFAULT_MESS_MENU = {
@@ -630,8 +663,8 @@
       // ================== SWITCHABLE AI ASSISTANT (Gemini / ChatGPT / Custom) ==================
       const AI_CFG_KEY = 'medpulse_ai_cfg_v1';
       let aiCfg = (() => {
-        try { return JSON.parse(localStorage.getItem(AI_CFG_KEY)) || { provider: 'gemini', model: 'gemini-2.5-flash', key: '', baseUrl: '' }; }
-        catch (e) { return { provider: 'gemini', model: 'gemini-2.5-flash', key: '', baseUrl: '' }; }
+        try { return JSON.parse(localStorage.getItem(AI_CFG_KEY)) || { provider: 'gemini', model: 'gemini-3.8-flash', key: '', baseUrl: '' }; }
+        catch (e) { return { provider: 'gemini', model: 'gemini-3.8-flash', key: '', baseUrl: '' }; }
       })();
 
       function appendAiChatMsg(role, text) {
@@ -677,7 +710,7 @@
 
       document.getElementById('openAiBtnTop').addEventListener('click', () => {
         document.getElementById('aiProviderSel').value = aiCfg.provider || 'gemini';
-        document.getElementById('aiModelIn').value = aiCfg.model || 'gemini-2.5-flash';
+        document.getElementById('aiModelIn').value = aiCfg.model || 'gemini-3.8-flash';
         document.getElementById('aiKeyIn').value = aiCfg.key || '';
         document.getElementById('aiBaseUrlIn').value = aiCfg.baseUrl || '';
         document.getElementById('aiCustomUrlRow').classList.toggle('hidden', aiCfg.provider !== 'custom');
@@ -689,7 +722,7 @@
       document.getElementById('aiProviderSel').addEventListener('change', (e) => {
         const p = e.target.value;
         document.getElementById('aiCustomUrlRow').classList.toggle('hidden', p !== 'custom');
-        if (p === 'gemini') document.getElementById('aiModelIn').value = 'gemini-2.5-flash';
+        if (p === 'gemini') document.getElementById('aiModelIn').value = 'gemini-3.8-flash';
         else if (p === 'openai') document.getElementById('aiModelIn').value = 'gpt-4o-mini';
       });
       document.getElementById('saveAiCfgBtn').addEventListener('click', () => {
@@ -737,10 +770,40 @@
         return `Added To-Do "${prompt}" under ${targetSub} (Due ${dateStr}).`;
       }
 
+      let aiPendingAttachment = null; // { file, name, mime, base64, textContent }
+      async function handleAiAttachFile(file) {
+        if (!file) return;
+        const mime = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'text/plain');
+        let base64 = null, textContent = null;
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
+          const buf = await file.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let bin = '';
+          for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+          base64 = btoa(bin);
+        } else {
+          textContent = await file.text();
+        }
+        aiPendingAttachment = { file, name: file.name, mime, base64, textContent };
+        document.getElementById('aiAttachName').textContent = file.name;
+        document.getElementById('aiAttachPreview').classList.remove('hidden');
+      }
+      ['aiImgIn', 'aiCamIn', 'aiFileIn'].forEach(id => {
+        document.getElementById(id).addEventListener('change', (e) => {
+          handleAiAttachFile(e.target.files[0]);
+          e.target.value = '';
+        });
+      });
+      document.getElementById('aiClearAttachBtn').addEventListener('click', () => {
+        aiPendingAttachment = null;
+        document.getElementById('aiAttachPreview').classList.add('hidden');
+      });
+
       document.getElementById('aiChatForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const prompt = document.getElementById('aiPromptIn').value.trim();
-        if (!prompt) return;
+        let prompt = document.getElementById('aiPromptIn').value.trim();
+        if (!prompt && !aiPendingAttachment) return;
+        if (!prompt && aiPendingAttachment) prompt = 'Extract and apply the schedule, tasks, mess menu, or exams from this attachment.';
         // Auto-sync UI config so forgetting to click Save doesn't block
         aiCfg = {
           provider: document.getElementById('aiProviderSel').value,
@@ -750,11 +813,24 @@
         };
         try { localStorage.setItem(AI_CFG_KEY, JSON.stringify(aiCfg)); } catch (err) {}
 
+        const attach = aiPendingAttachment;
+        aiPendingAttachment = null;
+        document.getElementById('aiAttachPreview').classList.add('hidden');
         document.getElementById('aiPromptIn').value = '';
-        appendAiChatMsg('user', prompt);
+        appendAiChatMsg('user', prompt + (attach ? ` [📎 ${attach.name}]` : ''));
 
         if (aiCfg.provider === 'local' || !aiCfg.key) {
-          const reply = runLocalAiFallback(prompt);
+          let combined = prompt;
+          if (attach) {
+            if (attach.textContent) combined += '\n' + attach.textContent;
+            else {
+              try {
+                appendAiChatMsg('ai', 'Scanning attachment with OCR...');
+                combined += '\n' + await extractTextFromFile(attach.file, () => {});
+              } catch (err) {}
+            }
+          }
+          const reply = runLocalAiFallback(combined);
           appendAiChatMsg('ai', reply + (!aiCfg.key && aiCfg.provider !== 'local' ? ' (Handled locally — add API key for full AI chat)' : ''));
           return;
         }
@@ -774,12 +850,16 @@ Supported actions:
         try {
           let rawText = '';
           if (aiCfg.provider === 'gemini') {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(aiCfg.model || 'gemini-2.5-flash')}:generateContent?key=${encodeURIComponent(aiCfg.key)}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(aiCfg.model || 'gemini-3.8-flash')}:generateContent?key=${encodeURIComponent(aiCfg.key)}`;
+            const parts = [{ text: sysPrompt + '\nUser request: ' + prompt + (attach && attach.textContent ? '\nFile content:\n' + attach.textContent : '') }];
+            if (attach && attach.base64) {
+              parts.push({ inline_data: { mime_type: attach.mime, data: attach.base64 } });
+            }
             const res = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: sysPrompt + '\nUser request: ' + prompt }] }],
+                contents: [{ role: 'user', parts }],
                 generationConfig: { responseMimeType: 'application/json' }
               })
             });
@@ -788,12 +868,23 @@ Supported actions:
             rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
           } else {
             const url = aiCfg.provider === 'custom' && aiCfg.baseUrl ? aiCfg.baseUrl : 'https://api.openai.com/v1/chat/completions';
+            let userContent = prompt;
+            if (attach) {
+              if (attach.mime.startsWith('image/') && attach.base64) {
+                userContent = [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${attach.mime};base64,${attach.base64}` } }];
+              } else if (attach.textContent) {
+                userContent = prompt + '\nFile content:\n' + attach.textContent;
+              } else if (attach.file) {
+                const ocrTxt = await extractTextFromFile(attach.file, () => {});
+                userContent = prompt + '\nExtracted PDF text:\n' + ocrTxt;
+              }
+            }
             const res = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${aiCfg.key}` },
               body: JSON.stringify({
                 model: aiCfg.model || 'gpt-4o-mini',
-                messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: prompt }],
+                messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: userContent }],
                 response_format: { type: 'json_object' }
               })
             });
@@ -1973,7 +2064,10 @@ Supported actions:
             openAppModal(`
               <div class="space-y-3">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                  <h3 class="font-bold text-base">Edit Weekly Class Schedule</h3>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-base">Edit Weekly Class Schedule</h3>
+                    <button id="loadMasterSchedBtn" class="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[11px] font-semibold hover:bg-indigo-100">↺ Load NSMCH Phase-III</button>
+                  </div>
                   <button id="cancelAppModal" class="p-1 text-xs">✕</button>
                 </div>
                 <form id="addSlotForm" class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs">
@@ -1993,6 +2087,11 @@ Supported actions:
                 </div>
               </div>
             `, () => {
+              document.getElementById('loadMasterSchedBtn').addEventListener('click', () => {
+                state.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
+                saveState(); renderAttendance(el); renderSchedModal();
+                showToast('Loaded NSMCH Phase-III (Part-1) Master Timetable!', 'success');
+              });
               document.getElementById('addSlotForm').addEventListener('submit', (e) => {
                 e.preventDefault();
                 state.schedule.push({
